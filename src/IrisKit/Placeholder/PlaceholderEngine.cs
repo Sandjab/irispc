@@ -36,6 +36,8 @@ namespace IrisKit
             this.secrets = secrets;
         }
 
+        private static readonly char[] ForbiddenChars = { '\r', '\n', '\0' };
+
         public async Task<ResolvedPayload> SubstituteAsync(HttpHeaders headers, string uri, byte[] body, IList<PlaceholderHit> resolvable)
         {
             if (resolvable == null || resolvable.Count == 0)
@@ -44,7 +46,11 @@ namespace IrisKit
             SortedSet<string> names = new SortedSet<string>(StringComparer.Ordinal);
             foreach (PlaceholderHit hit in resolvable) names.Add(hit.Name);
 
-            Dictionary<string, string> values = new Dictionary<string, string>(StringComparer.Ordinal);
+            // Deux textes par valeur : Latin-1 (un octet = un char) pour les en-têtes et l'URI, modélisés ainsi par HttpParser,
+            // afin que les octets UTF-8 partent tels quels sur le fil ; UTF-8 strict pour le corps. Une valeur non UTF-8, ou
+            // contenant CR, LF ou NUL (injection d'en-tête, request splitting), n'est jamais substituée : Unresolved.
+            Dictionary<string, string> wireValues = new Dictionary<string, string>(StringComparer.Ordinal);
+            Dictionary<string, string> bodyValues = new Dictionary<string, string>(StringComparer.Ordinal);
             List<string> unresolved = new List<string>();
             foreach (string name in names)
             {
@@ -56,13 +62,26 @@ namespace IrisKit
                     unresolved.Add(name);
                     continue;
                 }
-                try { values[name] = StrictUtf8.GetString(raw); }
+                try
+                {
+                    string text = StrictUtf8.GetString(raw);
+                    if (text.IndexOfAny(ForbiddenChars) >= 0)
+                    {
+                        Log.Warn("placeholder", "secret " + name + " contient un retour à la ligne ou un octet nul : non substitué");
+                        unresolved.Add(name);
+                    }
+                    else
+                    {
+                        bodyValues[name] = text;
+                        wireValues[name] = HttpParser.Latin1.GetString(raw);
+                    }
+                }
                 catch (DecoderFallbackException) { unresolved.Add(name); }
                 finally { Array.Clear(raw, 0, raw.Length); }
             }
 
             SortedSet<string> substituted = new SortedSet<string>(StringComparer.Ordinal);
-            Func<string, string> mutate = delegate(string input)
+            Func<string, Dictionary<string, string>, string> mutate = delegate(string input, Dictionary<string, string> values)
             {
                 string result = input;
                 foreach (KeyValuePair<string, string> kv in values)
@@ -76,8 +95,8 @@ namespace IrisKit
             };
 
             HttpHeaders newHeaders = new HttpHeaders();
-            foreach (HttpHeader h in headers) newHeaders.Add(mutate(h.Name), mutate(h.Value));
-            string newUri = mutate(uri);
+            foreach (HttpHeader h in headers) newHeaders.Add(mutate(h.Name, wireValues), mutate(h.Value, wireValues));
+            string newUri = mutate(uri, wireValues);
             byte[] newBody = body;
             if (body != null)
             {
@@ -86,7 +105,7 @@ namespace IrisKit
                 catch (DecoderFallbackException) { }
                 if (text != null)
                 {
-                    string transformed = mutate(text);
+                    string transformed = mutate(text, bodyValues);
                     if (!ReferenceEquals(transformed, text) && transformed != text) newBody = StrictUtf8.GetBytes(transformed);
                 }
             }

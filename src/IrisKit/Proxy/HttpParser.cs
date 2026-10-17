@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
@@ -157,7 +158,9 @@ namespace IrisKit
         /// <summary>Requête : chunked prime, puis Content-Length, sinon pas de corps.</summary>
         public static BodyFraming RequestFraming(HttpHeaders headers)
         {
-            if (IsChunked(headers)) return BodyFraming.Chunked;
+            TransferCoding te = ParseTransferCoding(headers, 400);
+            if (te == TransferCoding.Chunked) return BodyFraming.Chunked;
+            if (te == TransferCoding.Other) throw new HttpProtocolException(400, "Transfer-Encoding non pris en charge (seul chunked est accepté)");
             string cl = headers.First("Content-Length");
             if (cl == null) return BodyFraming.None;
             return BodyFraming.OfLength(ParseLength(cl, 400));
@@ -167,16 +170,30 @@ namespace IrisKit
         public static BodyFraming ResponseFraming(HttpHeaders headers, string requestMethod, int status)
         {
             if (string.Equals(requestMethod, "HEAD", StringComparison.OrdinalIgnoreCase) || status / 100 == 1 || status == 204 || status == 304) return BodyFraming.None;
-            if (IsChunked(headers)) return BodyFraming.Chunked;
+            TransferCoding te = ParseTransferCoding(headers, 502);
+            if (te == TransferCoding.Chunked) return BodyFraming.Chunked;
+            if (te == TransferCoding.Other) return BodyFraming.UntilClose; // RFC 7230 §3.3.3 : chunked non final → jusqu'à la fermeture
             string cl = headers.First("Content-Length");
             if (cl == null) return BodyFraming.UntilClose;
             return BodyFraming.OfLength(ParseLength(cl, 502));
         }
 
-        private static bool IsChunked(HttpHeaders headers)
+        private enum TransferCoding { None, Chunked, Other }
+
+        /// <summary>RFC 7230 §3.3.3 : chunked doit être le codage final ; chunked ailleurs → erreur (400 requête, 502 réponse).</summary>
+        private static TransferCoding ParseTransferCoding(HttpHeaders headers, int errorStatus)
         {
-            string te = headers.First("Transfer-Encoding");
-            return te != null && te.Trim().EndsWith("chunked", StringComparison.OrdinalIgnoreCase);
+            List<string> codings = new List<string>();
+            foreach (string value in headers.All("Transfer-Encoding"))
+                foreach (string token in value.Split(','))
+                {
+                    string t = token.Trim();
+                    if (t.Length > 0) codings.Add(t.ToLowerInvariant());
+                }
+            if (codings.Count == 0) return TransferCoding.None;
+            for (int i = 0; i < codings.Count - 1; i++)
+                if (codings[i] == "chunked") throw new HttpProtocolException(errorStatus, "Transfer-Encoding invalide : chunked n'est pas le codage final");
+            return codings[codings.Count - 1] == "chunked" ? TransferCoding.Chunked : TransferCoding.Other;
         }
 
         private static long ParseLength(string text, int errorStatus)

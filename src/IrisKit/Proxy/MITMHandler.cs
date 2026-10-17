@@ -49,8 +49,8 @@ namespace IrisKit
             {
                 HttpConnection http = new HttpConnection(tls);
                 http.ReadTimeout = server.Options.IdleTimeout;
-                int served = await ServeAsync(server, http, host, port, cancel).ConfigureAwait(false);
-                if (served == 0)
+                ServeOutcome outcome = await ServeAsync(server, http, host, port, cancel).ConfigureAwait(false);
+                if (outcome.Served == 0 && !outcome.ClosedByTimeout)
                 {
                     // Un client .NET/Schannel valide le certificat après la poignée de main et ferme sans rien envoyer :
                     // même diagnostic qu'une poignée de main refusée (spec §6.3).
@@ -60,9 +60,12 @@ namespace IrisKit
             }
         }
 
-        private static async Task<int> ServeAsync(ProxyServer server, HttpConnection http, string host, int port, CancellationToken cancel)
+        /// <summary>Ce que la boucle keep-alive a fait : nombre de requêtes servies, et si la fermeture vient du délai d'inactivité.</summary>
+        private sealed class ServeOutcome { public int Served; public bool ClosedByTimeout; }
+
+        private static async Task<ServeOutcome> ServeAsync(ProxyServer server, HttpConnection http, string host, int port, CancellationToken cancel)
         {
-            int served = 0;
+            ServeOutcome outcome = new ServeOutcome();
             UpstreamConnection upstream = null;
             try
             {
@@ -76,10 +79,10 @@ namespace IrisKit
                     if (protocolError != null)
                     {
                         await ConnectHandler.WriteSimpleResponseAsync(http, 400, protocolError.Message, cancel).ConfigureAwait(false);
-                        return served;
+                        return outcome;
                     }
-                    if (head == null) return served;
-                    served++;
+                    if (head == null) return outcome;
+                    outcome.Served++;
                     if (PingResponder.Matches(head))
                     {
                         await PingResponder.RespondAsync(http, cancel).ConfigureAwait(false);
@@ -97,7 +100,7 @@ namespace IrisKit
                     if (protocolError != null)
                     {
                         await ConnectHandler.WriteSimpleResponseAsync(http, 400, protocolError.Message, cancel).ConfigureAwait(false);
-                        return served;
+                        return outcome;
                     }
                     if (HttpParser.ExpectsContinue(head.Headers) && framing.Kind != BodyFramingKind.None)
                     {
@@ -111,16 +114,32 @@ namespace IrisKit
                     if (protocolError != null)
                     {
                         await ConnectHandler.WriteSimpleResponseAsync(http, 400, protocolError.Message, cancel).ConfigureAwait(false);
-                        return served;
+                        return outcome;
                     }
 
-                    ProcessedRequest processed = await server.Processor.ProcessAsync(head, body.Bytes, !body.Complete, host, server.Paused).ConfigureAwait(false);
+                    ProcessedRequest processed = null;
+                    SecretStoreException storeError = null;
+                    try { processed = await server.Processor.ProcessAsync(head, body.Bytes, !body.Complete, host, server.Paused).ConfigureAwait(false); }
+                    catch (SecretStoreException ex) { storeError = ex; }
+                    if (storeError != null)
+                    {
+                        // Coffre illisible ou verrouillé : réponse claire au client, event error, warn (le message du coffre ne porte jamais une valeur).
+                        Log.Warn("proxy", "coffre de secrets en erreur pour " + method + " " + originalTarget + " (" + host + ") : " + storeError.Message);
+                        server.Events.Emit(new Event(Guid.NewGuid(), started, EventKind.Error, host, method, originalTarget, 502, watch.ElapsedMilliseconds, null, null, null, EventFlags.None));
+                        await ConnectHandler.WriteSimpleResponseAsync(http, 502, "coffre de secrets indisponible : " + storeError.Message, cancel).ConfigureAwait(false);
+                        return outcome;
+                    }
                     HttpHeaders outHeaders = processed.Head.Headers;
                     if (body.Complete && framing.Kind != BodyFramingKind.None)
                     {
                         // Corps entièrement bufferisé : toujours renvoyé en Content-Length (chunked décodé, substitution comprise).
                         outHeaders.Remove("Transfer-Encoding");
                         outHeaders.Set("Content-Length", processed.Body.Length.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    }
+                    else if (!body.Complete && framing.Kind == BodyFramingKind.Chunked)
+                    {
+                        // Le corps repart en chunked : un Content-Length d'origine contradictoire ne doit pas le suivre (RFC 7230 §3.3.3).
+                        outHeaders.Remove("Content-Length");
                     }
 
                     HttpResponseHead response = null;
@@ -160,7 +179,7 @@ namespace IrisKit
                         Log.Warn("proxy", "amont " + host + ":" + port + " en échec pour " + method + " " + originalTarget + " : " + upstreamError.Message);
                         server.Events.Emit(new Event(Guid.NewGuid(), started, EventKind.Error, host, method, originalTarget, 502, watch.ElapsedMilliseconds, null, null, null, processed.Flags));
                         await ConnectHandler.WriteSimpleResponseAsync(http, 502, "amont injoignable : " + upstreamError.Message, cancel).ConfigureAwait(false);
-                        return served;
+                        return outcome;
                     }
 
                     bool upstreamWantsClose = HttpParser.WantsClose(response.Version, response.Headers);
@@ -182,19 +201,19 @@ namespace IrisKit
                     }
                     server.Events.Emit(new Event(Guid.NewGuid(), started, relayFailed ? EventKind.Error : processed.EventKind, host, method, originalTarget,
                         response.Status, watch.ElapsedMilliseconds, processed.Substituted, processed.Alert, null, processed.Flags));
-                    if (relayFailed) return served; // tête déjà sur le fil : on tronque en fermant (spec §6.3)
+                    if (relayFailed) return outcome; // tête déjà sur le fil : on tronque en fermant (spec §6.3)
                     if (upstreamWantsClose || responseFraming.Kind == BodyFramingKind.UntilClose) { upstream.Dispose(); upstream = null; }
-                    if (clientWantsClose || responseFraming.Kind == BodyFramingKind.UntilClose) return served;
+                    if (clientWantsClose || responseFraming.Kind == BodyFramingKind.UntilClose) return outcome;
                 }
             }
             catch (IOException) { }
-            catch (TimeoutException) { Log.Debug("proxy", "connexion déchiffrée vers " + host + " fermée pour inactivité"); }
+            catch (TimeoutException) { outcome.ClosedByTimeout = true; Log.Debug("proxy", "connexion déchiffrée vers " + host + " fermée pour inactivité"); }
             catch (ObjectDisposedException) { }
             finally
             {
                 if (upstream != null) upstream.Dispose();
             }
-            return served;
+            return outcome;
         }
     }
 }

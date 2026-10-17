@@ -138,6 +138,13 @@ namespace Iris.Tests
             Check.Run("Daemon : port occupé → 3", Entry_PortInUse_Exit3);
             Check.Run("Daemon : Ctrl+C pendant la saisie → 0", Entry_CtrlC_DuringPrompt_Exit0);
             Check.Run("PurgeScheduler : minuit UTC et RunNow", PurgeScheduler_NextMidnightAndRunNow);
+            Check.Run("Revue : tunnel, long téléchargement avec client silencieux", Fix_TunnelLongDownload_SurvivesClientSilence);
+            Check.Run("Revue : connexion déchiffrée inactive sans event error", Fix_IdleDecryptedConnection_NoErrorEvent);
+            Check.Run("Revue : erreur du coffre → 502, event error, warn", Fix_SecretStoreError_502AndErrorEvent);
+            Check.Run("Revue : valeur avec CR/LF/NUL jamais substituée", Fix_Engine_CrLfValueNeverSubstituted);
+            Check.Run("Revue : valeur non ASCII octet pour octet dans les en-têtes", Fix_Engine_NonAsciiValueKeepsUtf8BytesInHeaders);
+            Check.Run("Revue : Transfer-Encoding non chunked-final rejeté", Fix_Http_TransferEncodingNonChunkedRejected);
+            Check.Run("Revue : corps chunked trop grand sans Content-Length", Fix_MITM_LargeChunkedBody_DropsContentLength);
 
             return Check.Summary();
         }

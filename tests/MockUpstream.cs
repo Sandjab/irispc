@@ -26,6 +26,7 @@ namespace Iris.Tests
             public IList<byte[]> RemainingChunks = new List<byte[]>();
             public TaskCompletionSource<bool> ReleaseRest = new TaskCompletionSource<bool>();
             public bool DropAfterFirstChunk;
+            public TimeSpan ChunkDelay; // délai avant chaque chunk restant (simule un long téléchargement)
         }
 
         public int Port { get; private set; }
@@ -123,7 +124,12 @@ namespace Iris.Tests
             await http.FlushAsync(stopping.Token);
             if (plan.DropAfterFirstChunk) return; // fermeture sans dernier chunk : amont coupé en plein flux
             await plan.ReleaseRest.Task;
-            foreach (byte[] chunk in plan.RemainingChunks) await HttpParser.WriteChunkAsync(http, chunk, 0, chunk.Length, stopping.Token);
+            foreach (byte[] chunk in plan.RemainingChunks)
+            {
+                if (plan.ChunkDelay > TimeSpan.Zero) await Task.Delay(plan.ChunkDelay, stopping.Token);
+                await HttpParser.WriteChunkAsync(http, chunk, 0, chunk.Length, stopping.Token);
+                await http.FlushAsync(stopping.Token);
+            }
             await HttpParser.WriteLastChunkAsync(http, stopping.Token);
         }
 
