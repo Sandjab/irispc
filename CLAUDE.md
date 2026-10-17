@@ -45,6 +45,7 @@ render.bat   rend chaque vue de l'UI en PNG dans tests\out, sans réseau ni daem
 - KeePass : l'espace de noms `KeePassLib` est compilé dans `KeePass.exe` (pas de DLL séparée dans le zip portable) ; on le référence avec `-r:vendor\KeePass-2.61.1\KeePass.exe`, comme un plugin KeePass. Les trois fichiers d'exécution de KeePass (`KeePass.exe`, `KeePass.exe.config`, `KeePass.XmlSerializers.dll`), plus `License.txt`, sont commités dans `vendor\` (empreintes dans son README) et copiés dans le dossier portable.
 - `app.manifest` : DPI `PerMonitorV2`, `asInvoker` (pas d'élévation). L'installation du CA dans le magasin `CurrentUser\Root` ne demande pas d'élévation ; si une opération l'exige, elle est isolée et explicite, jamais l'app entière.
 - Pas de framework de test : `tests\Tests.cs` est un programme avec son propre `Main` qui remplace `Program.cs`, assertions maison, un compteur de vérifications. Les tests réseau utilisent un upstream HTTP mock local (cf. `../Iris/Tests/IntegrationTests/MockUpstream.swift`). Les tests du coffre créent une base temporaire dans `%TEMP%`, jamais une base utilisateur.
+- Les tests d'intégration du proxy tournent en process : `tests\MockUpstream.cs` (TLS avec son propre CA) et `tests\TestProxyClient.cs` (`CONNECT` puis TLS en confiance au CA du proxy) ; tout sur `127.0.0.1` port 0, jamais de réseau externe.
 - Dossier portable `build\Iris\` : les exécutables, leurs `.exe.config` (modèles dans `config\`), les fichiers KeePass, et `data\` (config, coffre, CA, events, backups) résolu par chaque exe depuis son propre emplacement. Pas de repli vers AppData.
 - Versionner : `AssemblyInfo.cs`, `app.manifest`, et la constante de version applicative, ensemble.
 
@@ -152,7 +153,7 @@ Les phases 0 à 2 forment le **socle**, spécifié dans `docs/superpowers/specs/
 
 1. **Phase 0** — squelette du dépôt, `vendor\KeePass`, `build.bat` / `test.bat`, `ci.yml` vert.
 2. **Phase 1** — `IrisKit` : `Json`, `Config`, modèles, `ISecretStore` + `KeePassSecretStore`, coffre, CA dans le coffre, events et log ; `irisd --foreground` crée le coffre, le CA et `ca.pem` puis attend.
-3. **Phase 2** — `irisd --foreground` : proxy MITM, tunnel, substitution, règles R1–R5, streaming.
+3. **Phase 2** — proxy MITM : `HttpParser`, tunnel, `LeafCertCache`, scanner, `ExfilRuleEngine` R1–R5, `RequestProcessor`, `MITMHandler` (keep-alive, streaming), `irisd --foreground` écoute sur `127.0.0.1:8888` ; démontrable avec le scénario `curl` de la spec §1.
 4. **Phase 3** — IPC : named pipe JSON-RPC + SSE events.
 5. **Phase 4** — scoping `allowed_hosts` + règles R1–R5.
 6. **Phase 5** — CLI `iris` (dont `mcp wrap`, `doctor`).
