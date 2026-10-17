@@ -109,6 +109,13 @@ namespace Iris.Tests
             Check.Run("Feuilles : renouvellement avant expiration", Leaf_RenewalNearExpiry);
             Check.Run("Feuilles : poignée de main Schannel et racine épinglée", Leaf_SchannelHandshake_PinnedTrust);
             Check.Run("Confiance amont : magasin système", UpstreamTrust_System);
+            Check.Run("Proxy : démarrage, arrêt, port occupé, bouclage seul", Proxy_StartStopAndLoopbackOnly);
+            Check.Run("Proxy : /__iris_ping", Proxy_Ping);
+            Check.Run("Proxy : 405 et 400", Proxy_NonConnect405_BadAuthority400);
+            Check.Run("Proxy : tunnel hors whitelist, certificat amont préservé", Proxy_TunnelPassthrough);
+            Check.Run("Proxy : amont injoignable → 502", Proxy_Tunnel502);
+            Check.Run("Proxy : UpdateRules, pause, options", Proxy_UpdateRulesPauseAndOptions);
+            Check.Run("Proxy : arrêt forcé et délai d'inactivité", Proxy_StopClosesConnections_AndIdleTimeout);
 
             return Check.Summary();
         }
