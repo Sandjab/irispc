@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compilateur csc.exe natif
+        run: dir "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+
+      - name: Tests (test.bat)
+        run: call test.bat
+
+      - name: Build (build.bat)
+        run: call build.bat
+
+      - name: Dossier portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: irispc-portable
+          path: build/Iris
+          if-no-files-found: error
