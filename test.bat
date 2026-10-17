@@ -1,0 +1,49 @@
+@echo off
+setlocal
+
+echo =======================================================
+echo Tests irispc (csc.exe natif, sans framework)
+echo =======================================================
+
+set CSC_PATH=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
+if not exist "%CSC_PATH%" set CSC_PATH=C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe
+if not exist "%CSC_PATH%" (
+    echo [ERREUR] Compilateur C# natif csc.exe introuvable.
+    exit /b 1
+)
+
+set ROOT=%~dp0
+set SRC=%ROOT%src
+set VENDOR=%ROOT%vendor\KeePass-2.61.1
+set TESTS=%ROOT%tests
+set OUT_EXE=%TESTS%\Iris.Tests.exe
+
+if not exist "%VENDOR%\KeePass.exe" (
+    echo [ERREUR] %VENDOR%\KeePass.exe introuvable : voir vendor\KeePass-2.61.1\README.md.
+    exit /b 1
+)
+
+rem Liste explicite des sources. src\irisd\Program.cs est remplace par le Main de tests\Tests.cs.
+set IRISKIT_SOURCES="%SRC%\IrisKit\IrisVersion.cs"
+set IRISD_SOURCES=
+set TEST_SOURCES="%TESTS%\Check.cs" "%TESTS%\Tests.cs"
+
+"%CSC_PATH%" -nologo -codepage:65001 -target:exe -r:System.dll,System.Core.dll,System.Web.Extensions.dll,System.Security.dll -r:"%VENDOR%\KeePass.exe" -out:"%OUT_EXE%" "%SRC%\AssemblyInfo.cs" %IRISKIT_SOURCES% %IRISD_SOURCES% %TEST_SOURCES%
+if %ERRORLEVEL% neq 0 (
+    echo [ECHEC] Compilation des tests impossible.
+    exit /b 1
+)
+
+rem KeePassLib est charge a l'execution depuis KeePass.exe place a cote de l'exe de tests.
+copy /y "%VENDOR%\KeePass.exe" "%TESTS%\" >nul
+copy /y "%VENDOR%\KeePass.XmlSerializers.dll" "%TESTS%\" >nul
+copy /y "%ROOT%config\irisd.exe.config" "%OUT_EXE%.config" >nul
+
+"%OUT_EXE%"
+set RESULT=%ERRORLEVEL%
+if %RESULT% equ 0 (
+    echo [SUCCES] Tous les tests passent.
+) else (
+    echo [ECHEC] Des tests ont echoue.
+)
+exit /b %RESULT%
