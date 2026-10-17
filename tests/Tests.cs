@@ -90,6 +90,11 @@ namespace Iris.Tests
             Check.Run("HTTP : corps Content-Length et chunked bufferisés", Http_ReadBodyContentLengthAndChunked);
             Check.Run("HTTP : relais streaming", Http_RelayBodyStreaming);
             Check.Run("HTTP : restes, préfixe, délai, annulation", Http_ConnectionLeftoverAndTimeout);
+            Check.Run("Scanner : emplacements", Scanner_Locations);
+            Check.Run("Scanner : noms invalides et snippets", Scanner_InvalidNamesAndSnippets);
+            Check.Run("Compteur : fenêtre glissante inclusive", Counter_SlidingMinute);
+            Check.Run("Engine : substitue seulement les hits autorisés", Engine_SubstitutesOnlyAuthorized);
+            Check.Run("Engine : toutes les occurrences, corps, URI, cache, non UTF-8", Engine_AllOccurrencesBodyUriAndCache);
 
             return Check.Summary();
         }
