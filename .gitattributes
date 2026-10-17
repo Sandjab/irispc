@@ -1,2 +1,12 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Scripts cmd : CRLF obligatoire
+*.bat text eol=crlf
+
+# Binaires redistribués (vendor\KeePass-2.61.1)
+*.exe binary
+*.dll binary
+*.chm binary
+*.ico binary
+*.png binary
