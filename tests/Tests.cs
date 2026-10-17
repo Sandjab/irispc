@@ -60,6 +60,9 @@ namespace Iris.Tests
             Check.Run("SecretStore : cache LRU 32 / TTL", SecretStore_Cache);
             Check.Run("EnvSecrets : chargement IRIS_SECRET_*", EnvSecrets_Load);
             Check.Run("EnvSecrets : sans hôtes = ignoré", EnvSecrets_MissingHosts_Ignored);
+            Check.Run("MetaStore : défauts, Flush, purge, format", MetaStore_DefaultsAndFlush);
+            Check.Run("MetaStore : débounce et Dispose", MetaStore_DebounceAndDispose);
+            Check.Run("MetaStore : fichier corrompu = repart vide", MetaStore_CorruptFileStartsEmpty);
 
             return Check.Summary();
         }
