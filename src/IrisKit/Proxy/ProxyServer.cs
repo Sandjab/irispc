@@ -42,8 +42,8 @@ namespace IrisKit
         public ISecretStore Secrets { get; private set; }
         public UpstreamClient Upstream { get; private set; }
         public Func<DateTime> Clock { get; private set; }
-        /// <summary>Posé par la tâche 6 (RequestProcessor) ; null tant que le MITM n'est pas branché.</summary>
-        public object Processor { get; set; }
+        /// <summary>Scan → règles → substitution ; construit par le serveur à partir d'Options.Security.</summary>
+        public RequestProcessor Processor { get; private set; }
 
         private readonly object gate = new object();
         private readonly HashSet<ClientConnection> connections = new HashSet<ClientConnection>();
@@ -68,6 +68,12 @@ namespace IrisKit
             Upstream = new UpstreamClient(options.UpstreamTrust, options.ConnectTimeout);
             allowed = new HashSet<string>(StringComparer.Ordinal);
             foreach (string h in options.AllowedHosts) allowed.Add(HostName.Normalize(h));
+            ProxyServer self = this;
+            Processor = new RequestProcessor(secrets,
+                delegate { return self.Options.Security.MaxSubstitutionsPerMinute; },
+                delegate { return self.Options.Security.OnExfilAttempt; },
+                delegate { self.SetPaused(true); },
+                clock);
         }
 
         // ---- Whitelist et pause ----------------------------------------------

@@ -116,6 +116,11 @@ namespace Iris.Tests
             Check.Run("Proxy : amont injoignable → 502", Proxy_Tunnel502);
             Check.Run("Proxy : UpdateRules, pause, options", Proxy_UpdateRulesPauseAndOptions);
             Check.Run("Proxy : arrêt forcé et délai d'inactivité", Proxy_StopClosesConnections_AndIdleTimeout);
+            Check.Run("Processor : substitution, en-têtes de saut, usage", Processor_SubstitutesStripsHopHeadersRecordsUsage);
+            Check.Run("Processor : blocage et politique on_exfil_attempt", Processor_BlockedAppliesPolicy);
+            Check.Run("Processor : pause = contournement avec drapeau", Processor_PausedBypasses);
+            Check.Run("Processor : drapeaux bodyTooLarge, nonUtf8, compressedBody", Processor_FlagsBodyTooLargeNonUtf8Compressed);
+            Check.Run("Processor : noMatch, inconnu, Content-Length", Processor_NoMatchUnknownAndContentLength);
 
             return Check.Summary();
         }
