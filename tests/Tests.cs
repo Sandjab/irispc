@@ -55,6 +55,11 @@ namespace Iris.Tests
             Check.Run("Events : bus d'abonnés", Events_Bus);
             Check.Run("Events : journal JSONL par jour, purge", Events_JsonlStore);
             Check.Run("Events : pipeline", Events_Pipeline);
+            Check.Run("SecretStore : contrat (mémoire)", SecretStore_InMemoryContract);
+            Check.Run("SecretStore : copies défensives", SecretStore_InMemoryDefensiveCopies);
+            Check.Run("SecretStore : cache LRU 32 / TTL", SecretStore_Cache);
+            Check.Run("EnvSecrets : chargement IRIS_SECRET_*", EnvSecrets_Load);
+            Check.Run("EnvSecrets : sans hôtes = ignoré", EnvSecrets_MissingHosts_Ignored);
 
             return Check.Summary();
         }
