@@ -134,6 +134,10 @@ namespace Iris.Tests
             Check.Run("MITM : R5 après le seuil", MITM_VolumeAnomaly_R5);
             Check.Run("MITM : Expect 100-continue et ping", MITM_Expect100ContinueAndPing);
             Check.Run("Sécurité : aucune valeur dans les dumps du proxy", Security_NoSecretValueInProxyDumps);
+            Check.Run("Daemon : démarre le proxy et répond au ping", Entry_StartsProxyAndAnswersPing);
+            Check.Run("Daemon : port occupé → 3", Entry_PortInUse_Exit3);
+            Check.Run("Daemon : Ctrl+C pendant la saisie → 0", Entry_CtrlC_DuringPrompt_Exit0);
+            Check.Run("PurgeScheduler : minuit UTC et RunNow", PurgeScheduler_NextMidnightAndRunNow);
 
             return Check.Summary();
         }
