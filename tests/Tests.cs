@@ -72,6 +72,14 @@ namespace Iris.Tests
             Check.Run("CA : génération, export PEM, rechargement", CA_GenerateAndReload);
             Check.Run("CA : désaccord clé/certificat ou expiration → régénération", CA_MismatchOrExpiredRegenerates);
             Check.Run("CA : persistance dans le coffre KeePass", CA_KeePassKeyStore);
+            Check.Run("Daemon : arguments, codes de sortie, résolution de data\\", Entry_ArgumentsAndExitCodes);
+            Check.Run("Daemon : crée le coffre, le CA et ca.pem, puis les recharge", Entry_CreatesVaultAndCA);
+            Check.Run("Daemon : trois mots de passe refusés → 2, EOF → 2", Entry_WrongPasswordThreeTimes_Exit2);
+            Check.Run("Daemon : confirmation du mot de passe à la création", Entry_PasswordMismatchOnCreate);
+            Check.Run("Daemon : data\\ inutilisable → 1", Entry_DataDirNotWritable_Exit1);
+            Check.Run("Daemon : config.json corrompu = démarrage dégradé", Entry_CorruptedConfig_StillStarts);
+            Check.Run("Daemon : --in-memory-secrets et --in-memory-ca", Entry_InMemorySecretsAndCA);
+            Check.Run("Sécurité : aucune valeur de secret dans les dumps", Security_NoSecretValueInDumps);
 
             return Check.Summary();
         }
@@ -131,7 +139,7 @@ namespace Iris.Tests
             Check.Eq("debug", a.LogLevel, "LogLevel");
             foreach (string level in Arguments.LogLevels)
                 Check.Eq(level, Arguments.Parse(new[] { "--log-level", level }).LogLevel, "niveau " + level);
-            Check.Eq(4, Arguments.LogLevels.Length, "quatre niveaux : debug, info, warning, error");
+            Check.Eq("trace,debug,info,warn,error", string.Join(",", Arguments.LogLevels), "niveaux IRIS");
         }
 
         private static void Arguments_VersionHelpEmpty()
@@ -159,6 +167,7 @@ namespace Iris.Tests
                 delegate { Arguments.Parse(new[] { "--data", "--foreground" }); }, "--data suivi d'une option");
             Check.True(ex.Message.Contains("--data"), "le message cite --data");
             Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--data", "" }); }, "--data vide");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--data", "  " }); }, "--data fait d'espaces (revue phase 0)");
             Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--log-level" }); }, "--log-level en fin");
         }
 
@@ -168,6 +177,7 @@ namespace Iris.Tests
                 delegate { Arguments.Parse(new[] { "--log-level", "verbose" }); }, "niveau inconnu");
             Check.True(ex.Message.Contains("verbose") && ex.Message.Contains("debug"), "le message cite la valeur et les niveaux attendus");
             Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--log-level", "INFO" }); }, "casse des niveaux");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--log-level", "warning" }); }, "warning n'est pas une valeur IRIS (warn)");
         }
 
         private static void Arguments_Duplicate()
@@ -186,6 +196,7 @@ namespace Iris.Tests
                 Check.True(usage.Contains(option), "usage cite " + option);
             Check.True(usage.Contains("d\u00e9faut"), "accent é intact (codepage 65001)");
             Check.True(usage.Contains("DEBUG"), "les modes in-memory sont marqués DEBUG");
+            Check.True(usage.Contains("trace | debug | info | warn | error"), "niveaux IRIS dans l'aide");
         }
 
         // ---- Outils ----------------------------------------------------

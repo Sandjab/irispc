@@ -32,4 +32,22 @@ namespace Iris.Tests
             return s;
         }
     }
+
+    /// <summary>Console scriptée : chaque ReadPassword rend la réponse suivante, null quand la liste est épuisée (EOF).</summary>
+    public sealed class ScriptedConsoleInput : Irisd.IConsoleInput
+    {
+        private readonly System.Collections.Generic.Queue<string> answers;
+        public System.Collections.Generic.List<string> Prompts = new System.Collections.Generic.List<string>();
+
+        public ScriptedConsoleInput(params string[] answers)
+        {
+            this.answers = new System.Collections.Generic.Queue<string>(answers);
+        }
+
+        public SecureString ReadPassword(string prompt)
+        {
+            Prompts.Add(prompt);
+            return answers.Count == 0 ? null : TestMain.Secure(answers.Dequeue());
+        }
+    }
 }

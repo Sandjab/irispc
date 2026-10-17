@@ -16,7 +16,7 @@ namespace Irisd
     /// </summary>
     public sealed class Arguments
     {
-        public static readonly string[] LogLevels = { "debug", "info", "warning", "error" };
+        public static readonly string[] LogLevels = IrisKit.LogLevelWire.Names;
 
         public bool Foreground { get; private set; }
         public bool ShowVersion { get; private set; }
@@ -73,7 +73,7 @@ namespace Irisd
                 "  --data <dossier>       dossier des données (défaut : data\\ à côté de irisd.exe)",
                 "  --in-memory-secrets    DEBUG : secrets lus depuis IRIS_SECRET_<NAME>, coffre non ouvert",
                 "  --in-memory-ca         DEBUG : CA éphémère, jamais écrit dans le coffre",
-                "  --log-level <niveau>   debug | info | warning | error (défaut : config.json)",
+                "  --log-level <niveau>   trace | debug | info | warn | error (défaut : config.json)",
                 "  --version              affiche la version",
                 "  --help                 affiche cette aide",
                 ""
@@ -84,7 +84,7 @@ namespace Irisd
         private static string ValueOf(string[] args, ref int i)
         {
             string option = args[i];
-            if (i + 1 >= args.Length || args[i + 1].Length == 0 || args[i + 1].StartsWith("--", StringComparison.Ordinal))
+            if (i + 1 >= args.Length || string.IsNullOrWhiteSpace(args[i + 1]) || args[i + 1].StartsWith("--", StringComparison.Ordinal))
                 throw new ArgumentsException("valeur manquante pour " + option);
             i++;
             return args[i];

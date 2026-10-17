@@ -140,7 +140,7 @@ Module `Json` au-dessus de `JavaScriptSerializer` : `Parse(string) → object` (
 
 ### 5.5 Events et journal
 
-`EventRing` (capacité `event_ring_size`), `EventsBus` (abonnés synchrones in-process ; le SSE s'y abonnera), `JsonlEventStore` (un fichier par jour UTC, une ligne par event, flush à chaque écriture, purge au démarrage et à minuit UTC des fichiers plus vieux que `event_retention_days`). `Log` : niveaux `debug|info|warning|error`, sortie console horodatée, `log_level` de la config. **Aucune valeur de secret** n'entre jamais dans un `Event`, un `Alert.snippet` ou une ligne de log : les snippets sont pris sur la requête **avant** substitution et tronqués.
+`EventRing` (capacité `event_ring_size`), `EventsBus` (abonnés synchrones in-process ; le SSE s'y abonnera), `JsonlEventStore` (un fichier par jour UTC, une ligne par event, flush à chaque écriture, purge au démarrage et à minuit UTC des fichiers plus vieux que `event_retention_days`). `Log` : niveaux `trace|debug|info|warn|error` (valeurs de `broker.log_level` d'IRIS, reprises telles quelles par `--log-level`), sortie console horodatée, `log_level` de la config. **Aucune valeur de secret** n'entre jamais dans un `Event`, un `Alert.snippet` ou une ligne de log : les snippets sont pris sur la requête **avant** substitution et tronqués.
 
 ## 6. Proxy MITM
 
