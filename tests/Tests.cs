@@ -11,7 +11,7 @@ namespace Iris.Tests
     /// Harnais de tests sans framework : compilé et exécuté par test.bat avec le csc.exe natif.
     /// Remplace src\irisd\Program.cs ; chaque test est une méthode, Summary() donne le code de sortie.
     /// </summary>
-    public static class TestMain
+    public static partial class TestMain
     {
         public static int Main()
         {
@@ -28,6 +28,61 @@ namespace Iris.Tests
             Check.Run("Arguments : niveau de log inconnu", Arguments_BadLogLevel);
             Check.Run("Arguments : option répétée refusée", Arguments_Duplicate);
             Check.Run("Arguments : usage en français, accents intacts", Arguments_UsageText);
+            Check.Run("Json : aller-retour ordonné, indentation", Json_RoundTripOrdered);
+            Check.Run("Json : compact et échappements", Json_CompactAndEscapes);
+            Check.Run("Json : dates ISO 8601 UTC", Json_Dates);
+            Check.Run("Json : erreurs de parse et d'accès", Json_Errors);
+            Check.Run("Json : nombres", Json_Numbers);
+            Check.Run("Modèles : validation des hôtes", Models_HostName);
+            Check.Run("Modèles : validation des secrets", Models_SecretValidation);
+            Check.Run("Modèles : Secret ↔ JSON", Models_SecretJson);
+            Check.Run("Modèles : MITMRule ↔ JSON", Models_MITMRule);
+            Check.Run("Modèles : Event avec Alert (fixture IRIS)", Models_EventWithAlert);
+            Check.Run("Modèles : Event systemAlert, flags, compat", Models_EventSystemAlertAndFlags);
+            Check.Run("Modèles : valeurs de fil des énumérations", Models_EnumWire);
+            Check.Run("Logging : niveaux et format", Logging_LevelsAndFormat);
+            Check.Run("Logging : valeurs de fil des niveaux", Logging_LevelWire);
+            Check.Run("Logging : redaction", Logging_Redaction);
+            Check.Run("Config : défauts et format de fil", Config_DefaultAndWire);
+            Check.Run("Config : plugins conservé tel quel", Config_PluginsPreservedRaw);
+            Check.Run("Config : validation de chaque champ", Config_Validation);
+            Check.Run("Backups : copie horodatée et rotation", Backups_CopyAndRotate);
+            Check.Run("ConfigStore : seed et relecture", ConfigStore_SeedAndLoad);
+            Check.Run("ConfigStore : Save, backups, rotation", ConfigStore_SaveBackupsRotation);
+            Check.Run("ConfigStore : démarrage dégradé sur corruption", ConfigStore_Corrupted_DegradedBoot);
+            Check.Run("ConfigStore : erreur d'E/S irrécupérable", ConfigStore_IOError);
+            Check.Run("Events : ring borné et totaux", Events_Ring);
+            Check.Run("Events : bus d'abonnés", Events_Bus);
+            Check.Run("Events : journal JSONL par jour, purge", Events_JsonlStore);
+            Check.Run("Events : pipeline", Events_Pipeline);
+            Check.Run("SecretStore : contrat (mémoire)", SecretStore_InMemoryContract);
+            Check.Run("SecretStore : copies défensives", SecretStore_InMemoryDefensiveCopies);
+            Check.Run("SecretStore : cache LRU 32 / TTL", SecretStore_Cache);
+            Check.Run("EnvSecrets : chargement IRIS_SECRET_*", EnvSecrets_Load);
+            Check.Run("EnvSecrets : sans hôtes = ignoré", EnvSecrets_MissingHosts_Ignored);
+            Check.Run("MetaStore : défauts, Flush, purge, format", MetaStore_DefaultsAndFlush);
+            Check.Run("MetaStore : débounce et Dispose", MetaStore_DebounceAndDispose);
+            Check.Run("MetaStore : fichier corrompu = repart vide", MetaStore_CorruptFileStartsEmpty);
+            Check.Run("KeePass : création, contrat, réouverture, schéma", KeePass_CreateContractReopen);
+            Check.Run("KeePass : mauvais mot de passe et corruption", KeePass_WrongPasswordAndCorruption);
+            Check.Run("KeePass : .lock = VaultBusy en écriture seulement", KeePass_LockFile_VaultBusy);
+            Check.Run("KeePass : backup avant écriture et rotation", KeePass_BackupsBeforeWrite);
+            Check.Run("KeePass : contenu étranger ignoré", KeePass_ForeignContentIgnored);
+            Check.Run("KeePass : entrée CA du groupe ca", KeePass_CAEntry);
+            Check.Run("KeePass : entrée malformée sautée avec avertissement", KeePass_MalformedEntry_SkippedWithWarning);
+            Check.Run("KeePass : Save échoué = rechargement depuis le disque", KeePass_SaveFailure_ReloadsFromDisk);
+            Check.Run("CA : génération, export PEM, rechargement", CA_GenerateAndReload);
+            Check.Run("CA : désaccord clé/certificat ou expiration → régénération", CA_MismatchOrExpiredRegenerates);
+            Check.Run("CA : persistance dans le coffre KeePass", CA_KeePassKeyStore);
+            Check.Run("Daemon : arguments, codes de sortie, résolution de data\\", Entry_ArgumentsAndExitCodes);
+            Check.Run("Daemon : crée le coffre, le CA et ca.pem, puis les recharge", Entry_CreatesVaultAndCA);
+            Check.Run("Daemon : trois mots de passe refusés → 2, EOF → 2", Entry_WrongPasswordThreeTimes_Exit2);
+            Check.Run("Daemon : confirmation du mot de passe à la création", Entry_PasswordMismatchOnCreate);
+            Check.Run("Daemon : data\\ inutilisable → 1", Entry_DataDirNotWritable_Exit1);
+            Check.Run("Daemon : config.json corrompu = démarrage dégradé", Entry_CorruptedConfig_StillStarts);
+            Check.Run("Daemon : --in-memory-secrets et --in-memory-ca", Entry_InMemorySecretsAndCA);
+            Check.Run("Sécurité : aucune valeur de secret dans les dumps", Security_NoSecretValueInDumps);
+            Check.Run("Daemon : exception inattendue → message et code 1", Entry_UnexpectedException_NoStackTrace);
 
             return Check.Summary();
         }
@@ -87,7 +142,7 @@ namespace Iris.Tests
             Check.Eq("debug", a.LogLevel, "LogLevel");
             foreach (string level in Arguments.LogLevels)
                 Check.Eq(level, Arguments.Parse(new[] { "--log-level", level }).LogLevel, "niveau " + level);
-            Check.Eq(4, Arguments.LogLevels.Length, "quatre niveaux : debug, info, warning, error");
+            Check.Eq("trace,debug,info,warn,error", string.Join(",", Arguments.LogLevels), "niveaux IRIS");
         }
 
         private static void Arguments_VersionHelpEmpty()
@@ -115,6 +170,7 @@ namespace Iris.Tests
                 delegate { Arguments.Parse(new[] { "--data", "--foreground" }); }, "--data suivi d'une option");
             Check.True(ex.Message.Contains("--data"), "le message cite --data");
             Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--data", "" }); }, "--data vide");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--data", "  " }); }, "--data fait d'espaces (revue phase 0)");
             Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--log-level" }); }, "--log-level en fin");
         }
 
@@ -124,6 +180,7 @@ namespace Iris.Tests
                 delegate { Arguments.Parse(new[] { "--log-level", "verbose" }); }, "niveau inconnu");
             Check.True(ex.Message.Contains("verbose") && ex.Message.Contains("debug"), "le message cite la valeur et les niveaux attendus");
             Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--log-level", "INFO" }); }, "casse des niveaux");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--log-level", "warning" }); }, "warning n'est pas une valeur IRIS (warn)");
         }
 
         private static void Arguments_Duplicate()
@@ -142,6 +199,7 @@ namespace Iris.Tests
                 Check.True(usage.Contains(option), "usage cite " + option);
             Check.True(usage.Contains("d\u00e9faut"), "accent é intact (codepage 65001)");
             Check.True(usage.Contains("DEBUG"), "les modes in-memory sont marqués DEBUG");
+            Check.True(usage.Contains("trace | debug | info | warn | error"), "niveaux IRIS dans l'aide");
         }
 
         // ---- Outils ----------------------------------------------------

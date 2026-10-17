@@ -42,7 +42,7 @@ render.bat   rend chaque vue de l'UI en PNG dans tests\out, sans réseau ni daem
 ```
 
 - Flags csc de référence : `-nologo -codepage:65001 -optimize+ -win32icon:app.ico -win32manifest:app.manifest -r:System.dll,System.Core.dll,System.Web.Extensions.dll,System.Security.dll` (plus `System.Windows.Forms.dll,System.Drawing.dll` pour l'app). `-codepage:65001` est obligatoire : les sources sont en UTF-8 sans BOM et contiennent des accents. Depuis Git Bash, utiliser la forme `-flag` (`/flag` est réécrit en chemin) et des chemins de sources à antislash entre apostrophes (`'src\IrisKit\X.cs'`, sinon csc perd le répertoire) ; les `.bat` s'appellent par chemin absolu : `cmd //c 'D:\Dev\irispc\test.bat'`. Jamais de package NuGet.
-- KeePass : l'espace de noms `KeePassLib` est compilé dans `KeePass.exe` (pas de DLL séparée dans le zip portable) ; on le référence avec `-r:vendor\KeePass-2.61.1\KeePass.exe`, comme un plugin KeePass. Les trois fichiers KeePass sont commités dans `vendor\` et copiés dans le dossier portable.
+- KeePass : l'espace de noms `KeePassLib` est compilé dans `KeePass.exe` (pas de DLL séparée dans le zip portable) ; on le référence avec `-r:vendor\KeePass-2.61.1\KeePass.exe`, comme un plugin KeePass. Les trois fichiers d'exécution de KeePass (`KeePass.exe`, `KeePass.exe.config`, `KeePass.XmlSerializers.dll`), plus `License.txt`, sont commités dans `vendor\` (empreintes dans son README) et copiés dans le dossier portable.
 - `app.manifest` : DPI `PerMonitorV2`, `asInvoker` (pas d'élévation). L'installation du CA dans le magasin `CurrentUser\Root` ne demande pas d'élévation ; si une opération l'exige, elle est isolée et explicite, jamais l'app entière.
 - Pas de framework de test : `tests\Tests.cs` est un programme avec son propre `Main` qui remplace `Program.cs`, assertions maison, un compteur de vérifications. Les tests réseau utilisent un upstream HTTP mock local (cf. `../Iris/Tests/IntegrationTests/MockUpstream.swift`). Les tests du coffre créent une base temporaire dans `%TEMP%`, jamais une base utilisateur.
 - Dossier portable `build\Iris\` : les exécutables, leurs `.exe.config` (modèles dans `config\`), les fichiers KeePass, et `data\` (config, coffre, CA, events, backups) résolu par chaque exe depuis son propre emplacement. Pas de repli vers AppData.
@@ -137,6 +137,7 @@ Principes : cadran calme sur graphite chaud, **seule la couleur d'état est colo
 - Erreurs : exceptions typées, messages utilisateur en français. Logs avec niveaux explicites, **jamais de valeur de secret**, redaction par nom du secret.
 - Textes UI et documentation en **français** ; identifiants de code, noms de commandes CLI, clés JSON et messages de protocole en anglais, identiques à IRIS.
 - Un fichier par responsabilité ; au-delà d'environ 300 lignes, scinder.
+- Niveaux de log : valeurs IRIS `trace|debug|info|warn|error` partout (`config.json`, `--log-level`, `Log`).
 - Pas de télémétrie, pas de phone-home : le daemon ne contacte que les hôtes de la whitelist MITM.
 
 ## Workflow git (hérité d'IRIS)
@@ -150,7 +151,7 @@ Principes : cadran calme sur graphite chaud, **seule la couleur d'état est colo
 Les phases 0 à 2 forment le **socle**, spécifié dans `docs/superpowers/specs/2026-10-17-socle-design.md`. Les lots suivants reçoivent chacun leur spec.
 
 1. **Phase 0** — squelette du dépôt, `vendor\KeePass`, `build.bat` / `test.bat`, `ci.yml` vert.
-2. **Phase 1** — `IrisKit` : JSON, config, modèles, `ISecretStore` + `KeePassSecretStore`, coffre, CA dans le coffre, events et log.
+2. **Phase 1** — `IrisKit` : `Json`, `Config`, modèles, `ISecretStore` + `KeePassSecretStore`, coffre, CA dans le coffre, events et log ; `irisd --foreground` crée le coffre, le CA et `ca.pem` puis attend.
 3. **Phase 2** — `irisd --foreground` : proxy MITM, tunnel, substitution, règles R1–R5, streaming.
 4. **Phase 3** — IPC : named pipe JSON-RPC + SSE events.
 5. **Phase 4** — scoping `allowed_hosts` + règles R1–R5.
