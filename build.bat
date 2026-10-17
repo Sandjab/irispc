@@ -1,0 +1,47 @@
+@echo off
+setlocal
+
+echo =======================================================
+echo Compilation d'irispc (csc.exe natif, .NET Framework 4.8)
+echo =======================================================
+
+set CSC_PATH=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
+if not exist "%CSC_PATH%" set CSC_PATH=C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe
+if not exist "%CSC_PATH%" (
+    echo [ERREUR] Compilateur C# natif csc.exe introuvable.
+    exit /b 1
+)
+echo Compilateur : %CSC_PATH%
+
+set ROOT=%~dp0
+set SRC=%ROOT%src
+set VENDOR=%ROOT%vendor\KeePass-2.61.1
+set OUT=%ROOT%build\Iris
+
+if not exist "%VENDOR%\KeePass.exe" (
+    echo [ERREUR] %VENDOR%\KeePass.exe introuvable : voir vendor\KeePass-2.61.1\README.md.
+    exit /b 1
+)
+if not exist "%OUT%" mkdir "%OUT%"
+
+rem --- irisd.exe ----------------------------------------------------------
+rem Liste explicite des sources (meme liste IrisKit que test.bat).
+set IRISKIT_SOURCES="%SRC%\IrisKit\IrisVersion.cs"
+set IRISD_SOURCES="%SRC%\irisd\Arguments.cs" "%SRC%\irisd\Program.cs"
+
+"%CSC_PATH%" -nologo -codepage:65001 -target:exe -optimize+ -win32manifest:"%ROOT%app.manifest" -r:System.dll,System.Core.dll,System.Web.Extensions.dll,System.Security.dll -r:"%VENDOR%\KeePass.exe" -out:"%OUT%\irisd.exe" "%SRC%\AssemblyInfo.cs" %IRISKIT_SOURCES% %IRISD_SOURCES%
+if %ERRORLEVEL% neq 0 (
+    echo [ECHEC] Compilation de irisd.exe impossible.
+    exit /b 1
+)
+
+rem --- Dossier portable ---------------------------------------------------
+copy /y "%ROOT%config\irisd.exe.config" "%OUT%\irisd.exe.config" >nul
+copy /y "%VENDOR%\KeePass.exe" "%OUT%\" >nul
+copy /y "%VENDOR%\KeePass.exe.config" "%OUT%\" >nul
+copy /y "%VENDOR%\KeePass.XmlSerializers.dll" "%OUT%\" >nul
+copy /y "%VENDOR%\License.txt" "%OUT%\KeePass-License.txt" >nul
+
+echo.
+echo [SUCCES] Dossier portable assemble : %OUT%
+exit /b 0

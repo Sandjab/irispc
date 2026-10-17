@@ -41,11 +41,11 @@ test.bat     compile src\ + tests\Tests.cs en un exe de tests et l'exécute ; co
 render.bat   rend chaque vue de l'UI en PNG dans tests\out, sans réseau ni daemon (captures pour le manuel)
 ```
 
-- Flags csc de référence : `-nologo -optimize+ -win32icon:app.ico -win32manifest:app.manifest -r:System.dll,System.Core.dll,System.Web.Extensions.dll,System.Security.dll` (plus `System.Windows.Forms.dll,System.Drawing.dll` pour l'app). Depuis Git Bash, utiliser la forme `-flag` : `/flag` est réécrit en chemin. Jamais de package NuGet.
+- Flags csc de référence : `-nologo -codepage:65001 -optimize+ -win32icon:app.ico -win32manifest:app.manifest -r:System.dll,System.Core.dll,System.Web.Extensions.dll,System.Security.dll` (plus `System.Windows.Forms.dll,System.Drawing.dll` pour l'app). `-codepage:65001` est obligatoire : les sources sont en UTF-8 sans BOM et contiennent des accents. Depuis Git Bash, utiliser la forme `-flag` (`/flag` est réécrit en chemin) et des chemins de sources à antislash entre apostrophes (`'src\IrisKit\X.cs'`, sinon csc perd le répertoire) ; les `.bat` s'appellent par chemin absolu : `cmd //c 'D:\Dev\irispc\test.bat'`. Jamais de package NuGet.
 - KeePass : l'espace de noms `KeePassLib` est compilé dans `KeePass.exe` (pas de DLL séparée dans le zip portable) ; on le référence avec `-r:vendor\KeePass-2.61.1\KeePass.exe`, comme un plugin KeePass. Les trois fichiers KeePass sont commités dans `vendor\` et copiés dans le dossier portable.
 - `app.manifest` : DPI `PerMonitorV2`, `asInvoker` (pas d'élévation). L'installation du CA dans le magasin `CurrentUser\Root` ne demande pas d'élévation ; si une opération l'exige, elle est isolée et explicite, jamais l'app entière.
 - Pas de framework de test : `tests\Tests.cs` est un programme avec son propre `Main` qui remplace `Program.cs`, assertions maison, un compteur de vérifications. Les tests réseau utilisent un upstream HTTP mock local (cf. `../Iris/Tests/IntegrationTests/MockUpstream.swift`). Les tests du coffre créent une base temporaire dans `%TEMP%`, jamais une base utilisateur.
-- Dossier portable `build\Iris\` : les exécutables, leurs `.exe.config`, les fichiers KeePass, et `data\` (config, coffre, CA, events, backups) résolu par chaque exe depuis son propre emplacement. Pas de repli vers AppData.
+- Dossier portable `build\Iris\` : les exécutables, leurs `.exe.config` (modèles dans `config\`), les fichiers KeePass, et `data\` (config, coffre, CA, events, backups) résolu par chaque exe depuis son propre emplacement. Pas de repli vers AppData.
 - Versionner : `AssemblyInfo.cs`, `app.manifest`, et la constante de version applicative, ensemble.
 
 ## Architecture cible
