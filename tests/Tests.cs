@@ -104,6 +104,11 @@ namespace Iris.Tests
             Check.Run("Fuzz : scan borné, pipeline sans exception", Fuzz_ScanBoundedAndPipelineNeverThrows);
             Check.Run("Fuzz : la valeur sentinelle n'apparaît dans aucun event", Fuzz_SentinelNeverInEncodedEvent);
             Check.Run("Fuzz : hors scope jamais substitué", Fuzz_OutOfScopeNeverSubstituted);
+            Check.Run("Feuilles : signée par le CA, SAN, validité", Leaf_SignedByCA_SanValidity);
+            Check.Run("Feuilles : cache, éviction et Dispose suppriment les clés CNG", Leaf_CacheEvictAndDispose_DeleteCngKeys);
+            Check.Run("Feuilles : renouvellement avant expiration", Leaf_RenewalNearExpiry);
+            Check.Run("Feuilles : poignée de main Schannel et racine épinglée", Leaf_SchannelHandshake_PinnedTrust);
+            Check.Run("Confiance amont : magasin système", UpstreamTrust_System);
 
             return Check.Summary();
         }
