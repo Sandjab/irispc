@@ -2,12 +2,20 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-test:
     runs-on: windows-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     defaults:
       run:
         shell: cmd
