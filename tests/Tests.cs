@@ -51,6 +51,10 @@ namespace Iris.Tests
             Check.Run("ConfigStore : Save, backups, rotation", ConfigStore_SaveBackupsRotation);
             Check.Run("ConfigStore : démarrage dégradé sur corruption", ConfigStore_Corrupted_DegradedBoot);
             Check.Run("ConfigStore : erreur d'E/S irrécupérable", ConfigStore_IOError);
+            Check.Run("Events : ring borné et totaux", Events_Ring);
+            Check.Run("Events : bus d'abonnés", Events_Bus);
+            Check.Run("Events : journal JSONL par jour, purge", Events_JsonlStore);
+            Check.Run("Events : pipeline", Events_Pipeline);
 
             return Check.Summary();
         }
