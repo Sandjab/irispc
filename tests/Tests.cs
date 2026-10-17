@@ -83,6 +83,13 @@ namespace Iris.Tests
             Check.Run("Daemon : --in-memory-secrets et --in-memory-ca", Entry_InMemorySecretsAndCA);
             Check.Run("Sécurité : aucune valeur de secret dans les dumps", Security_NoSecretValueInDumps);
             Check.Run("Daemon : exception inattendue → message et code 1", Entry_UnexpectedException_NoStackTrace);
+            Check.Run("HTTP : tête de requête", Http_RequestHead);
+            Check.Run("HTTP : limites et erreurs de tête", Http_HeadLimitsAndErrors);
+            Check.Run("HTTP : tête de réponse et cadrage", Http_ResponseHeadAndFraming);
+            Check.Run("HTTP : encodage des têtes et HttpHeaders", Http_EncodeHeads);
+            Check.Run("HTTP : corps Content-Length et chunked bufferisés", Http_ReadBodyContentLengthAndChunked);
+            Check.Run("HTTP : relais streaming", Http_RelayBodyStreaming);
+            Check.Run("HTTP : restes, préfixe, délai, annulation", Http_ConnectionLeftoverAndTimeout);
 
             return Check.Summary();
         }
