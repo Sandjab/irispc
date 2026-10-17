@@ -43,6 +43,14 @@ namespace Iris.Tests
             Check.Run("Logging : niveaux et format", Logging_LevelsAndFormat);
             Check.Run("Logging : valeurs de fil des niveaux", Logging_LevelWire);
             Check.Run("Logging : redaction", Logging_Redaction);
+            Check.Run("Config : défauts et format de fil", Config_DefaultAndWire);
+            Check.Run("Config : plugins conservé tel quel", Config_PluginsPreservedRaw);
+            Check.Run("Config : validation de chaque champ", Config_Validation);
+            Check.Run("Backups : copie horodatée et rotation", Backups_CopyAndRotate);
+            Check.Run("ConfigStore : seed et relecture", ConfigStore_SeedAndLoad);
+            Check.Run("ConfigStore : Save, backups, rotation", ConfigStore_SaveBackupsRotation);
+            Check.Run("ConfigStore : démarrage dégradé sur corruption", ConfigStore_Corrupted_DegradedBoot);
+            Check.Run("ConfigStore : erreur d'E/S irrécupérable", ConfigStore_IOError);
 
             return Check.Summary();
         }
