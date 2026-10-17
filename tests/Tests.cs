@@ -95,6 +95,15 @@ namespace Iris.Tests
             Check.Run("Compteur : fenêtre glissante inclusive", Counter_SlidingMinute);
             Check.Run("Engine : substitue seulement les hits autorisés", Engine_SubstitutesOnlyAuthorized);
             Check.Run("Engine : toutes les occurrences, corps, URI, cache, non UTF-8", Engine_AllOccurrencesBodyUriAndCache);
+            Check.Run("Exfil : R1 hostMismatch", Exfil_R1_HostMismatch);
+            Check.Run("Exfil : R2 nonCanonicalLocation", Exfil_R2_NonCanonicalLocation);
+            Check.Run("Exfil : R3 multipleSecrets (connus seulement)", Exfil_R3_MultipleSecrets);
+            Check.Run("Exfil : R4 derrière R2", Exfil_R4_BehindR2);
+            Check.Run("Exfil : R5 volumeAnomaly", Exfil_R5_VolumeAnomaly);
+            Check.Run("Exfil : composition et quarantaine", Exfil_CompositionAndQuarantine);
+            Check.Run("Fuzz : scan borné, pipeline sans exception", Fuzz_ScanBoundedAndPipelineNeverThrows);
+            Check.Run("Fuzz : la valeur sentinelle n'apparaît dans aucun event", Fuzz_SentinelNeverInEncodedEvent);
+            Check.Run("Fuzz : hors scope jamais substitué", Fuzz_OutOfScopeNeverSubstituted);
 
             return Check.Summary();
         }
