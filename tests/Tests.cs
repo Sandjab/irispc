@@ -33,6 +33,13 @@ namespace Iris.Tests
             Check.Run("Json : dates ISO 8601 UTC", Json_Dates);
             Check.Run("Json : erreurs de parse et d'accès", Json_Errors);
             Check.Run("Json : nombres", Json_Numbers);
+            Check.Run("Modèles : validation des hôtes", Models_HostName);
+            Check.Run("Modèles : validation des secrets", Models_SecretValidation);
+            Check.Run("Modèles : Secret ↔ JSON", Models_SecretJson);
+            Check.Run("Modèles : MITMRule ↔ JSON", Models_MITMRule);
+            Check.Run("Modèles : Event avec Alert (fixture IRIS)", Models_EventWithAlert);
+            Check.Run("Modèles : Event systemAlert, flags, compat", Models_EventSystemAlertAndFlags);
+            Check.Run("Modèles : valeurs de fil des énumérations", Models_EnumWire);
 
             return Check.Summary();
         }

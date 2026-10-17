@@ -24,9 +24,9 @@ if not exist "%VENDOR%\KeePass.exe" (
 )
 
 rem Liste explicite des sources. src\irisd\Program.cs est remplace par le Main de tests\Tests.cs.
-set IRISKIT_SOURCES="%SRC%\IrisKit\IrisVersion.cs" "%SRC%\IrisKit\Json\JsonParser.cs" "%SRC%\IrisKit\Json\JsonObject.cs" "%SRC%\IrisKit\Json\JsonWriter.cs"
+set IRISKIT_SOURCES="%SRC%\IrisKit\IrisVersion.cs" "%SRC%\IrisKit\Json\JsonParser.cs" "%SRC%\IrisKit\Json\JsonObject.cs" "%SRC%\IrisKit\Json\JsonWriter.cs" "%SRC%\IrisKit\Models\HostName.cs" "%SRC%\IrisKit\Models\Secret.cs" "%SRC%\IrisKit\Models\MITMRule.cs" "%SRC%\IrisKit\Models\Alert.cs" "%SRC%\IrisKit\Models\Event.cs" "%SRC%\IrisKit\SecretStore\ISecretStore.cs"
 set IRISD_SOURCES="%SRC%\irisd\Arguments.cs"
-set TEST_SOURCES="%TESTS%\Check.cs" "%TESTS%\Tests.cs" "%TESTS%\JsonTests.cs"
+set TEST_SOURCES="%TESTS%\Check.cs" "%TESTS%\Tests.cs" "%TESTS%\JsonTests.cs" "%TESTS%\ModelsTests.cs"
 
 "%CSC_PATH%" -nologo -codepage:65001 -target:exe -r:System.dll,System.Core.dll,System.Web.Extensions.dll,System.Security.dll -r:"%VENDOR%\KeePass.exe" -out:"%OUT_EXE%" "%SRC%\AssemblyInfo.cs" %IRISKIT_SOURCES% %IRISD_SOURCES% %TEST_SOURCES%
 if %ERRORLEVEL% neq 0 (
