@@ -35,9 +35,9 @@ if %ERRORLEVEL% neq 0 (
 )
 
 rem KeePassLib est charge a l'execution depuis KeePass.exe place a cote de l'exe de tests.
-copy /y "%VENDOR%\KeePass.exe" "%TESTS%\" >nul
-copy /y "%VENDOR%\KeePass.XmlSerializers.dll" "%TESTS%\" >nul
-copy /y "%ROOT%config\irisd.exe.config" "%OUT_EXE%.config" >nul
+copy /y "%VENDOR%\KeePass.exe" "%TESTS%\" >nul || goto copy_failed
+copy /y "%VENDOR%\KeePass.XmlSerializers.dll" "%TESTS%\" >nul || goto copy_failed
+copy /y "%ROOT%config\irisd.exe.config" "%OUT_EXE%.config" >nul || goto copy_failed
 
 "%OUT_EXE%"
 set RESULT=%ERRORLEVEL%
@@ -47,3 +47,7 @@ if %RESULT% equ 0 (
     echo [ECHEC] Des tests ont echoue.
 )
 exit /b %RESULT%
+
+:copy_failed
+echo [ECHEC] Copie de KeePass ou du .exe.config a cote de l'exe de tests impossible (fichier verrouille ou chemin occupe) : %TESTS%
+exit /b 1

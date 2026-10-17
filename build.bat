@@ -36,12 +36,16 @@ if %ERRORLEVEL% neq 0 (
 )
 
 rem --- Dossier portable ---------------------------------------------------
-copy /y "%ROOT%config\irisd.exe.config" "%OUT%\irisd.exe.config" >nul
-copy /y "%VENDOR%\KeePass.exe" "%OUT%\" >nul
-copy /y "%VENDOR%\KeePass.exe.config" "%OUT%\" >nul
-copy /y "%VENDOR%\KeePass.XmlSerializers.dll" "%OUT%\" >nul
-copy /y "%VENDOR%\License.txt" "%OUT%\KeePass-License.txt" >nul
+copy /y "%ROOT%config\irisd.exe.config" "%OUT%\irisd.exe.config" >nul || goto copy_failed
+copy /y "%VENDOR%\KeePass.exe" "%OUT%\" >nul || goto copy_failed
+copy /y "%VENDOR%\KeePass.exe.config" "%OUT%\" >nul || goto copy_failed
+copy /y "%VENDOR%\KeePass.XmlSerializers.dll" "%OUT%\" >nul || goto copy_failed
+copy /y "%VENDOR%\License.txt" "%OUT%\KeePass-License.txt" >nul || goto copy_failed
 
 echo.
 echo [SUCCES] Dossier portable assemble : %OUT%
 exit /b 0
+
+:copy_failed
+echo [ECHEC] Copie des fichiers du dossier portable impossible (fichier verrouille ou chemin occupe) : %OUT%
+exit /b 1
