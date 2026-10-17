@@ -1,0 +1,19 @@
+# Sorties de build (dossier portable assemblé par build.bat)
+build/
+
+# Exécutable de tests et fichiers copiés à côté par test.bat
+tests/*.exe
+tests/*.exe.config
+tests/*.pdb
+tests/KeePass.exe
+tests/KeePass.XmlSerializers.dll
+tests/out/
+
+# Données locales d'une instance lancée depuis le dépôt
+data/
+
+# Divers
+*.pdb
+*.suo
+*.user
+Thumbs.db

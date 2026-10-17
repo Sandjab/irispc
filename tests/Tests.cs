@@ -1,0 +1,156 @@
+using System;
+using System.IO;
+using System.Reflection;
+using System.Text;
+using IrisKit;
+using Irisd;
+
+namespace Iris.Tests
+{
+    /// <summary>
+    /// Harnais de tests sans framework : compilé et exécuté par test.bat avec le csc.exe natif.
+    /// Remplace src\irisd\Program.cs ; chaque test est une méthode, Summary() donne le code de sortie.
+    /// </summary>
+    public static class TestMain
+    {
+        public static int Main()
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+
+            Check.Run("Check : Eq et Throws signalent les écarts", Check_SelfTest);
+            Check.Run("Version : constante, assembly et manifeste cohérents", Version_Consistent);
+            Check.Run("KeePassLib : chargeable depuis KeePass.exe 2.61.1", KeePassLib_Loads);
+            Check.Run("Arguments : --foreground seul", Arguments_ForegroundOnly);
+            Check.Run("Arguments : toutes les options de la spec §7", Arguments_AllOptions);
+            Check.Run("Arguments : --version, --help, vide", Arguments_VersionHelpEmpty);
+            Check.Run("Arguments : option inconnue, casse, positionnel", Arguments_Unknown);
+            Check.Run("Arguments : valeur manquante ou vide pour --data et --log-level", Arguments_MissingValue);
+            Check.Run("Arguments : niveau de log inconnu", Arguments_BadLogLevel);
+            Check.Run("Arguments : option répétée refusée", Arguments_Duplicate);
+            Check.Run("Arguments : usage en français, accents intacts", Arguments_UsageText);
+
+            return Check.Summary();
+        }
+
+        // ---- Harnais ---------------------------------------------------
+
+        private static void Check_SelfTest()
+        {
+            CheckException ex = Check.Throws<CheckException>(delegate { Check.Eq(1, 2, "un contre deux"); }, "Eq détecte l'écart");
+            Check.True(ex.Message.Contains("attendu <1>") && ex.Message.Contains("obtenu <2>"), "le message cite les deux valeurs");
+            Check.Throws<CheckException>(delegate { Check.True(false, "faux"); }, "True(false) lève");
+            Check.Throws<CheckException>(
+                delegate { Check.Throws<InvalidOperationException>(delegate { }, "rien"); },
+                "Throws sans exception lève");
+            Check.Throws<CheckException>(
+                delegate { Check.Throws<InvalidOperationException>(delegate { throw new ArgumentException("x"); }, "autre"); },
+                "Throws avec un autre type lève");
+        }
+
+        // ---- Version ---------------------------------------------------
+
+        private static void Version_Consistent()
+        {
+            Version assembly = typeof(IrisVersion).Assembly.GetName().Version;
+            Check.Eq(IrisVersion.Value + ".0", assembly.ToString(), "AssemblyVersion = IrisVersion.Value + .0");
+
+            string manifest = File.ReadAllText(RepoPath("app.manifest"));
+            Check.True(manifest.Contains("version=\"" + IrisVersion.Value + ".0\""), "app.manifest porte la même version");
+        }
+
+        // ---- KeePass ---------------------------------------------------
+
+        private static void KeePassLib_Loads()
+        {
+            KeePassLib.PwDatabase db = new KeePassLib.PwDatabase();
+            Check.True(!db.IsOpen, "base neuve fermée");
+            Check.Eq("2.61.1.0", typeof(KeePassLib.PwDatabase).Assembly.GetName().Version.ToString(), "version de l'assembly KeePass");
+        }
+
+        // ---- Arguments de irisd ----------------------------------------
+
+        private static void Arguments_ForegroundOnly()
+        {
+            Arguments a = Arguments.Parse(new[] { "--foreground" });
+            Check.True(a.Foreground, "Foreground");
+            Check.True(!a.ShowVersion && !a.ShowHelp && !a.InMemorySecrets && !a.InMemoryCa, "autres drapeaux à faux");
+            Check.Eq(null, a.Data, "Data par défaut");
+            Check.Eq(null, a.LogLevel, "LogLevel par défaut");
+        }
+
+        private static void Arguments_AllOptions()
+        {
+            Arguments a = Arguments.Parse(new[] {
+                "--foreground", "--data", "D:\\iris data", "--in-memory-secrets", "--in-memory-ca", "--log-level", "debug" });
+            Check.True(a.Foreground && a.InMemorySecrets && a.InMemoryCa, "drapeaux");
+            Check.Eq("D:\\iris data", a.Data, "Data conservé tel quel, espace compris");
+            Check.Eq("debug", a.LogLevel, "LogLevel");
+            foreach (string level in Arguments.LogLevels)
+                Check.Eq(level, Arguments.Parse(new[] { "--log-level", level }).LogLevel, "niveau " + level);
+            Check.Eq(4, Arguments.LogLevels.Length, "quatre niveaux : debug, info, warning, error");
+        }
+
+        private static void Arguments_VersionHelpEmpty()
+        {
+            Check.True(Arguments.Parse(new[] { "--version" }).ShowVersion, "--version");
+            Check.True(Arguments.Parse(new[] { "--help" }).ShowHelp, "--help");
+            Arguments empty = Arguments.Parse(new string[0]);
+            Check.True(!empty.Foreground && !empty.ShowVersion && !empty.ShowHelp, "vide : rien de demandé");
+        }
+
+        private static void Arguments_Unknown()
+        {
+            ArgumentsException ex = Check.Throws<ArgumentsException>(
+                delegate { Arguments.Parse(new[] { "--foreground", "--verbose" }); }, "option inconnue");
+            Check.True(ex.Message.Contains("--verbose"), "le message cite l'option");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--Foreground" }); }, "sensible à la casse");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "foreground" }); }, "positionnel refusé");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "-f" }); }, "forme courte refusée");
+        }
+
+        private static void Arguments_MissingValue()
+        {
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--foreground", "--data" }); }, "--data en fin");
+            ArgumentsException ex = Check.Throws<ArgumentsException>(
+                delegate { Arguments.Parse(new[] { "--data", "--foreground" }); }, "--data suivi d'une option");
+            Check.True(ex.Message.Contains("--data"), "le message cite --data");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--data", "" }); }, "--data vide");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--log-level" }); }, "--log-level en fin");
+        }
+
+        private static void Arguments_BadLogLevel()
+        {
+            ArgumentsException ex = Check.Throws<ArgumentsException>(
+                delegate { Arguments.Parse(new[] { "--log-level", "verbose" }); }, "niveau inconnu");
+            Check.True(ex.Message.Contains("verbose") && ex.Message.Contains("debug"), "le message cite la valeur et les niveaux attendus");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--log-level", "INFO" }); }, "casse des niveaux");
+        }
+
+        private static void Arguments_Duplicate()
+        {
+            ArgumentsException ex = Check.Throws<ArgumentsException>(
+                delegate { Arguments.Parse(new[] { "--data", "a", "--data", "b" }); }, "--data répété");
+            Check.True(ex.Message.Contains("--data"), "le message cite l'option");
+            Check.Throws<ArgumentsException>(delegate { Arguments.Parse(new[] { "--foreground", "--foreground" }); }, "--foreground répété");
+        }
+
+        private static void Arguments_UsageText()
+        {
+            string usage = Arguments.Usage();
+            Check.True(usage.StartsWith("Usage : irisd --foreground"), "première ligne");
+            foreach (string option in new[] { "--foreground", "--data", "--in-memory-secrets", "--in-memory-ca", "--log-level", "--version", "--help" })
+                Check.True(usage.Contains(option), "usage cite " + option);
+            Check.True(usage.Contains("d\u00e9faut"), "accent é intact (codepage 65001)");
+            Check.True(usage.Contains("DEBUG"), "les modes in-memory sont marqués DEBUG");
+        }
+
+        // ---- Outils ----------------------------------------------------
+
+        /// <summary>Chemin d'un fichier du dépôt, depuis l'emplacement de Iris.Tests.exe (tests\).</summary>
+        private static string RepoPath(string relative)
+        {
+            string testsDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            return Path.GetFullPath(Path.Combine(testsDir, "..", relative));
+        }
+    }
+}
