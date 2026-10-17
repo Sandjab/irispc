@@ -10,3 +10,6 @@
 *.chm binary
 *.ico binary
 *.png binary
+
+# Fichiers vendor : octets exacts, jamais de normalisation (les empreintes SHA-256 du README doivent rester vraies)
+vendor/** -text
