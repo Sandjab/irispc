@@ -69,6 +69,9 @@ namespace Iris.Tests
             Check.Run("KeePass : backup avant écriture et rotation", KeePass_BackupsBeforeWrite);
             Check.Run("KeePass : contenu étranger ignoré", KeePass_ForeignContentIgnored);
             Check.Run("KeePass : entrée CA du groupe ca", KeePass_CAEntry);
+            Check.Run("CA : génération, export PEM, rechargement", CA_GenerateAndReload);
+            Check.Run("CA : désaccord clé/certificat ou expiration → régénération", CA_MismatchOrExpiredRegenerates);
+            Check.Run("CA : persistance dans le coffre KeePass", CA_KeePassKeyStore);
 
             return Check.Summary();
         }
