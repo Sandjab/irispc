@@ -63,6 +63,12 @@ namespace Iris.Tests
             Check.Run("MetaStore : défauts, Flush, purge, format", MetaStore_DefaultsAndFlush);
             Check.Run("MetaStore : débounce et Dispose", MetaStore_DebounceAndDispose);
             Check.Run("MetaStore : fichier corrompu = repart vide", MetaStore_CorruptFileStartsEmpty);
+            Check.Run("KeePass : création, contrat, réouverture, schéma", KeePass_CreateContractReopen);
+            Check.Run("KeePass : mauvais mot de passe et corruption", KeePass_WrongPasswordAndCorruption);
+            Check.Run("KeePass : .lock = VaultBusy en écriture seulement", KeePass_LockFile_VaultBusy);
+            Check.Run("KeePass : backup avant écriture et rotation", KeePass_BackupsBeforeWrite);
+            Check.Run("KeePass : contenu étranger ignoré", KeePass_ForeignContentIgnored);
+            Check.Run("KeePass : entrée CA du groupe ca", KeePass_CAEntry);
 
             return Check.Summary();
         }
