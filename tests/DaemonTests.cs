@@ -52,6 +52,14 @@ namespace Iris.Tests
             Check.Eq(Path.GetFullPath("rel\\x"), DataDir.Resolve("rel\\x"), "--data relatif résolu depuis le répertoire courant");
         }
 
+        private static void Entry_UnexpectedException_NoStackTrace()
+        {
+            RunResult r = RunDaemon(new ScriptedConsoleInput(), "--foreground", "--data", "C:\bad|path");
+            Check.Eq(ExitCodes.Data, r.Code, "exception inattendue → code 1, pas de plantage : " + r.Err);
+            Check.True(r.Err.StartsWith("irisd : "), "message préfixé irisd : sur stderr : " + r.Err);
+            Check.True(!r.Err.Contains("   at ") && !r.Err.Contains("   à "), "aucune trace de pile");
+        }
+
         private static void Entry_CreatesVaultAndCA()
         {
             string dir = TestDir.Create();

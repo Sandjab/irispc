@@ -94,16 +94,21 @@ namespace IrisKit
             return new KeePassVault(path, db);
         }
 
-        /// <summary>CompositeKey depuis une SecureString : les octets UTF-8 transitoires sont effacés aussitôt.</summary>
+        /// <summary>
+        /// CompositeKey depuis une SecureString sans jamais créer de string managée (immuable, non effaçable) :
+        /// copie native → char[] → octets UTF-8, tous effacés aussitôt. KcpPassword ne garde que le SHA-256.
+        /// </summary>
         private static CompositeKey MakeKey(SecureString password)
         {
             IntPtr unicode = IntPtr.Zero;
+            char[] chars = null;
             byte[] utf8 = null;
             try
             {
                 unicode = Marshal.SecureStringToGlobalAllocUnicode(password);
-                string plain = Marshal.PtrToStringUni(unicode);
-                utf8 = Encoding.UTF8.GetBytes(plain);
+                chars = new char[password.Length];
+                Marshal.Copy(unicode, chars, 0, chars.Length);
+                utf8 = Encoding.UTF8.GetBytes(chars);
                 CompositeKey key = new CompositeKey();
                 key.AddUserKey(new KcpPassword(utf8));
                 return key;
@@ -111,6 +116,7 @@ namespace IrisKit
             finally
             {
                 if (utf8 != null) Array.Clear(utf8, 0, utf8.Length);
+                if (chars != null) Array.Clear(chars, 0, chars.Length);
                 if (unicode != IntPtr.Zero) Marshal.ZeroFreeGlobalAllocUnicode(unicode);
             }
         }
@@ -163,7 +169,18 @@ namespace IrisKit
             {
                 List<VaultSecretEntry> list = new List<VaultSecretEntry>();
                 PwGroup g = Group(SecretsGroup, false);
-                if (g != null) foreach (PwEntry e in g.Entries) list.Add(ToEntry(e));
+                if (g != null)
+                {
+                    // Spec §4.1 : une entrée illisible (éditée à la main dans KeePass) est ignorée en lecture, pas fatale.
+                    foreach (PwEntry e in g.Entries)
+                    {
+                        try { list.Add(ToEntry(e)); }
+                        catch (SecretStoreException ex)
+                        {
+                            Log.Warn("vault", "entrée ignorée dans le groupe " + SecretsGroup + " : " + ex.Message);
+                        }
+                    }
+                }
                 list.Sort(delegate(VaultSecretEntry a, VaultSecretEntry b) { return string.CompareOrdinal(a.Name, b.Name); });
                 return list;
             }
@@ -203,8 +220,12 @@ namespace IrisKit
                 try
                 {
                     string created = e.Strings.ReadSafe(CreatedAtField);
+                    char[] keyB64 = e.Strings.GetSafe(PwDefs.PasswordField).ReadChars();
+                    byte[] privateKey;
+                    try { privateKey = Convert.FromBase64CharArray(keyB64, 0, keyB64.Length); }
+                    finally { Array.Clear(keyB64, 0, keyB64.Length); }
                     return new CAMaterial(
-                        Convert.FromBase64String(e.Strings.GetSafe(PwDefs.PasswordField).ReadString()),
+                        privateKey,
                         Convert.FromBase64String(e.Strings.ReadSafe(CertificateField)),
                         created.Length > 0 ? Json.ParseDate(created) : e.CreationTime.ToUniversalTime());
                 }
@@ -311,10 +332,33 @@ namespace IrisKit
             try { db.Save(new NullStatusLogger()); }
             catch (Exception ex)
             {
-                if (ex is IOException || ex is UnauthorizedAccessException)
-                    throw new SecretStoreException(SecretStoreErrorKind.DataCorruption, null, "écriture du coffre impossible : " + ex.Message, ex);
-                throw;
+                if (!(ex is IOException || ex is UnauthorizedAccessException)) throw;
+                // La base en mémoire porte la mutation non écrite : on la réaligne sur le disque (intact, Save est transactionnel).
+                string reload = ReloadFromDisk();
+                throw new SecretStoreException(SecretStoreErrorKind.DataCorruption, null,
+                    "écriture du coffre impossible : " + ex.Message + reload, ex);
             }
+        }
+
+        /// <summary>Rouvre le kdbx depuis le disque avec la clé déjà connue ; en cas d'échec, le coffre est marqué incohérent.</summary>
+        private string ReloadFromDisk()
+        {
+            PwDatabase fresh = new PwDatabase();
+            try
+            {
+                fresh.Open(IOConnectionInfo.FromPath(Path), db.MasterKey, new NullStatusLogger());
+            }
+            catch (Exception ex)
+            {
+                db.Close();
+                db = null;
+                Log.Error("vault", "coffre incohérent après un échec d'écriture, rechargement impossible (" + ex.Message + ") : redémarrez irisd");
+                return " ; le coffre est fermé, redémarrez irisd";
+            }
+            db.Close();
+            db = fresh;
+            Log.Warn("vault", "écriture refusée, coffre rechargé depuis le disque : la modification est perdue");
+            return " (modification annulée)";
         }
 
         public void Dispose()

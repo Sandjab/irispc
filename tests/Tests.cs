@@ -69,6 +69,8 @@ namespace Iris.Tests
             Check.Run("KeePass : backup avant écriture et rotation", KeePass_BackupsBeforeWrite);
             Check.Run("KeePass : contenu étranger ignoré", KeePass_ForeignContentIgnored);
             Check.Run("KeePass : entrée CA du groupe ca", KeePass_CAEntry);
+            Check.Run("KeePass : entrée malformée sautée avec avertissement", KeePass_MalformedEntry_SkippedWithWarning);
+            Check.Run("KeePass : Save échoué = rechargement depuis le disque", KeePass_SaveFailure_ReloadsFromDisk);
             Check.Run("CA : génération, export PEM, rechargement", CA_GenerateAndReload);
             Check.Run("CA : désaccord clé/certificat ou expiration → régénération", CA_MismatchOrExpiredRegenerates);
             Check.Run("CA : persistance dans le coffre KeePass", CA_KeePassKeyStore);
@@ -80,6 +82,7 @@ namespace Iris.Tests
             Check.Run("Daemon : config.json corrompu = démarrage dégradé", Entry_CorruptedConfig_StillStarts);
             Check.Run("Daemon : --in-memory-secrets et --in-memory-ca", Entry_InMemorySecretsAndCA);
             Check.Run("Sécurité : aucune valeur de secret dans les dumps", Security_NoSecretValueInDumps);
+            Check.Run("Daemon : exception inattendue → message et code 1", Entry_UnexpectedException_NoStackTrace);
 
             return Check.Summary();
         }

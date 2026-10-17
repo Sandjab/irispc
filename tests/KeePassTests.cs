@@ -179,6 +179,81 @@ namespace Iris.Tests
             finally { TestDir.Delete(dir); }
         }
 
+        private static void KeePass_MalformedEntry_SkippedWithWarning()
+        {
+            string dir = TestDir.Create();
+            try
+            {
+                string kdbx = Path.Combine(dir, "iris.kdbx");
+                using (KeePassVault vault = KeePassVault.Create(kdbx, Secure("p"), T0))
+                {
+                    vault.BackupsDir = Path.Combine(dir, "backups");
+                    vault.AddSecret("good", Bytes("v1"), new[] { "h.example" }, T0);
+                    vault.AddSecret("bad", Bytes("v2"), new[] { "h.example" }, T0);
+                }
+                PwDatabase raw = new PwDatabase();
+                CompositeKey key = new CompositeKey();
+                key.AddUserKey(new KcpPassword("p"));
+                raw.Open(IOConnectionInfo.FromPath(kdbx), key, new NullStatusLogger());
+                foreach (PwGroup g in raw.RootGroup.Groups)
+                    if (g.Name == KeePassVault.SecretsGroup)
+                        foreach (PwEntry e in g.Entries)
+                            if (e.Strings.ReadSafe(PwDefs.TitleField) == "bad")
+                                e.Strings.Set(KeePassVault.HostsField, new ProtectedString(false, "pas du json"));
+                raw.Save(new NullStatusLogger());
+                raw.Close();
+                StringWriter log = new StringWriter();
+                Log.Reset();
+                Log.Writer = log;
+                using (KeePassVault vault = KeePassVault.Open(kdbx, Secure("p")))
+                {
+                    IList<VaultSecretEntry> list = vault.ListSecrets();
+                    Check.True(list.Count == 1 && list[0].Name == "good", "l'entrée malformée est sautée, les autres sont listées");
+                    Check.Eq("good", string.Join(",", vault.SecretNames()), "SecretNames ignore aussi l'entrée malformée");
+                    Check.True(log.ToString().Contains("WARN") && log.ToString().Contains("bad"), "avertissement nommant l'entrée : " + log);
+                    Check.True(!log.ToString().Contains("v2"), "aucune valeur dans le journal");
+                    SecretStoreException ex = Check.Throws<SecretStoreException>(delegate { vault.FindSecret("bad"); }, "accès nominal : erreur stricte");
+                    Check.Eq(SecretStoreErrorKind.DataCorruption, ex.Kind, "DataCorruption");
+                }
+                Log.Reset();
+            }
+            finally { TestDir.Delete(dir); }
+        }
+
+        private static void KeePass_SaveFailure_ReloadsFromDisk()
+        {
+            string dir = TestDir.Create();
+            try
+            {
+                string kdbx = Path.Combine(dir, "iris.kdbx");
+                using (KeePassVault vault = KeePassVault.Create(kdbx, Secure("p"), T0))
+                {
+                    vault.BackupsDir = Path.Combine(dir, "backups");
+                    vault.AddSecret("a", Bytes("v"), new[] { "h.example" }, T0);
+                    File.SetAttributes(kdbx, FileAttributes.ReadOnly);
+                    try
+                    {
+                        SecretStoreException ex = Check.Throws<SecretStoreException>(
+                            delegate { vault.AddSecret("b", Bytes("w"), new[] { "h.example" }, T0); }, "Save impossible sur fichier en lecture seule");
+                        Check.Eq(SecretStoreErrorKind.DataCorruption, ex.Kind, "DataCorruption");
+                        Check.True(vault.FindSecret("b") == null, "la mutation non sauvée n'est pas servie en mémoire");
+                        Check.Eq(1, vault.ListSecrets().Count, "état mémoire = état disque");
+                        Check.True(vault.FindSecret("a") != null, "les entrées sauvées restent lisibles");
+                    }
+                    finally
+                    {
+                        File.SetAttributes(kdbx, FileAttributes.Normal);
+                        foreach (string f in Directory.GetFiles(Path.Combine(dir, "backups"))) File.SetAttributes(f, FileAttributes.Normal);
+                    }
+                    vault.AddSecret("b", Bytes("w"), new[] { "h.example" }, T0);
+                    Check.Eq(2, vault.ListSecrets().Count, "le coffre reste utilisable une fois le disque réparé");
+                }
+                using (KeePassVault vault = KeePassVault.Open(kdbx, Secure("p")))
+                    Check.Eq("a,b", string.Join(",", vault.SecretNames()), "relecture après réparation");
+            }
+            finally { TestDir.Delete(dir); }
+        }
+
         private static void KeePass_CAEntry()
         {
             string dir = TestDir.Create();

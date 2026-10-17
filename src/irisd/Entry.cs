@@ -27,7 +27,18 @@ namespace Irisd
                 stderr.Write(Arguments.Usage());
                 return ExitCodes.Data;
             }
-            return new Daemon(options, stdout, stderr, console).Run(cancel);
+            try { return new Daemon(options, stdout, stderr, console).Run(cancel); }
+            catch (SecretStoreException ex)
+            {
+                stderr.WriteLine("irisd : coffre : " + ex.Message);
+                return ExitCodes.Vault;
+            }
+            catch (Exception ex)
+            {
+                // Garde-fou : jamais de trace de pile brute pour l'utilisateur (le message d'une exception ne contient jamais de secret).
+                stderr.WriteLine("irisd : erreur inattendue (" + ex.GetType().Name + ") : " + ex.Message);
+                return ExitCodes.Data;
+            }
         }
     }
 }
