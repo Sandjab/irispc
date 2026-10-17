@@ -121,6 +121,19 @@ namespace Iris.Tests
             Check.Run("Processor : pause = contournement avec drapeau", Processor_PausedBypasses);
             Check.Run("Processor : drapeaux bodyTooLarge, nonUtf8, compressedBody", Processor_FlagsBodyTooLargeNonUtf8Compressed);
             Check.Run("Processor : noMatch, inconnu, Content-Length", Processor_NoMatchUnknownAndContentLength);
+            Check.Run("MITM : la valeur substituée atteint l'amont", MITM_SubstitutedValueReachesUpstream);
+            Check.Run("MITM : R1 bloqué, littéral transmis, event", MITM_HostMismatch_BlockedForwardedLiteral);
+            Check.Run("MITM : keep-alive, deux requêtes, amont réutilisé", MITM_KeepAlive_TwoRequests);
+            Check.Run("MITM : streaming chunk par chunk", MITM_StreamingChunksArriveIncrementally);
+            Check.Run("MITM : coupure amont en plein flux", MITM_UpstreamDropMidStream_TruncatesClient);
+            Check.Run("MITM : corps > 4 MiB relayé avec bodyTooLarge", MITM_LargeBody_StreamedWithFlag);
+            Check.Run("MITM : corps non UTF-8 et compressé", MITM_NonUtf8AndCompressedBody_Flags);
+            Check.Run("MITM : amont injoignable → 502", MITM_Upstream502);
+            Check.Run("MITM : client qui refuse le CA → event error", MITM_ClientRejectsCA_ErrorEvent);
+            Check.Run("MITM : pause automatique et reprise", MITM_PausePolicyAndResume);
+            Check.Run("MITM : R5 après le seuil", MITM_VolumeAnomaly_R5);
+            Check.Run("MITM : Expect 100-continue et ping", MITM_Expect100ContinueAndPing);
+            Check.Run("Sécurité : aucune valeur dans les dumps du proxy", Security_NoSecretValueInProxyDumps);
 
             return Check.Summary();
         }

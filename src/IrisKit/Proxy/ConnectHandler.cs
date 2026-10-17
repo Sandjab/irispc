@@ -97,13 +97,4 @@ namespace IrisKit
             catch (ObjectDisposedException) { }
         }
     }
-
-    /// <summary>Bouchon remplacé par la tâche 7 : un hôte whitelisté reçoit 502 tant que le MITM n'existe pas.</summary>
-    public static class MITMHandler
-    {
-        public static Task RunAsync(ProxyServer server, ClientConnection conn, string host, int port, CancellationToken cancel)
-        {
-            return ConnectHandler.WriteSimpleResponseAsync(conn.Http, 502, "MITM non disponible (phase 2, tâche 7)", cancel);
-        }
-    }
 }
