@@ -11,7 +11,7 @@ namespace Iris.Tests
     /// Harnais de tests sans framework : compilé et exécuté par test.bat avec le csc.exe natif.
     /// Remplace src\irisd\Program.cs ; chaque test est une méthode, Summary() donne le code de sortie.
     /// </summary>
-    public static class TestMain
+    public static partial class TestMain
     {
         public static int Main()
         {
@@ -28,6 +28,11 @@ namespace Iris.Tests
             Check.Run("Arguments : niveau de log inconnu", Arguments_BadLogLevel);
             Check.Run("Arguments : option répétée refusée", Arguments_Duplicate);
             Check.Run("Arguments : usage en français, accents intacts", Arguments_UsageText);
+            Check.Run("Json : aller-retour ordonné, indentation", Json_RoundTripOrdered);
+            Check.Run("Json : compact et échappements", Json_CompactAndEscapes);
+            Check.Run("Json : dates ISO 8601 UTC", Json_Dates);
+            Check.Run("Json : erreurs de parse et d'accès", Json_Errors);
+            Check.Run("Json : nombres", Json_Numbers);
 
             return Check.Summary();
         }

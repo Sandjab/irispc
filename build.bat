@@ -26,7 +26,7 @@ if not exist "%OUT%" mkdir "%OUT%"
 
 rem --- irisd.exe ----------------------------------------------------------
 rem Liste explicite des sources (meme liste IrisKit que test.bat).
-set IRISKIT_SOURCES="%SRC%\IrisKit\IrisVersion.cs"
+set IRISKIT_SOURCES="%SRC%\IrisKit\IrisVersion.cs" "%SRC%\IrisKit\Json\JsonParser.cs" "%SRC%\IrisKit\Json\JsonObject.cs" "%SRC%\IrisKit\Json\JsonWriter.cs"
 set IRISD_SOURCES="%SRC%\irisd\Arguments.cs" "%SRC%\irisd\Program.cs"
 
 "%CSC_PATH%" -nologo -codepage:65001 -target:exe -optimize+ -win32manifest:"%ROOT%app.manifest" -r:System.dll,System.Core.dll,System.Web.Extensions.dll,System.Security.dll -r:"%VENDOR%\KeePass.exe" -out:"%OUT%\irisd.exe" "%SRC%\AssemblyInfo.cs" %IRISKIT_SOURCES% %IRISD_SOURCES%
