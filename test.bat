@@ -25,7 +25,7 @@ if not exist "%VENDOR%\KeePass.exe" (
 
 rem Liste explicite des sources. src\irisd\Program.cs est remplace par le Main de tests\Tests.cs.
 set IRISKIT_SOURCES="%SRC%\IrisKit\IrisVersion.cs"
-set IRISD_SOURCES=
+set IRISD_SOURCES="%SRC%\irisd\Arguments.cs"
 set TEST_SOURCES="%TESTS%\Check.cs" "%TESTS%\Tests.cs"
 
 "%CSC_PATH%" -nologo -codepage:65001 -target:exe -r:System.dll,System.Core.dll,System.Web.Extensions.dll,System.Security.dll -r:"%VENDOR%\KeePass.exe" -out:"%OUT_EXE%" "%SRC%\AssemblyInfo.cs" %IRISKIT_SOURCES% %IRISD_SOURCES% %TEST_SOURCES%
