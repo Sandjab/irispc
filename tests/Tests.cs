@@ -40,6 +40,9 @@ namespace Iris.Tests
             Check.Run("Modèles : Event avec Alert (fixture IRIS)", Models_EventWithAlert);
             Check.Run("Modèles : Event systemAlert, flags, compat", Models_EventSystemAlertAndFlags);
             Check.Run("Modèles : valeurs de fil des énumérations", Models_EnumWire);
+            Check.Run("Logging : niveaux et format", Logging_LevelsAndFormat);
+            Check.Run("Logging : valeurs de fil des niveaux", Logging_LevelWire);
+            Check.Run("Logging : redaction", Logging_Redaction);
 
             return Check.Summary();
         }
