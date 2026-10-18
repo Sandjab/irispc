@@ -61,8 +61,29 @@ namespace IrisKit
                 await WriteSimpleResponseAsync(http, 400, "autorité CONNECT invalide", cancel).ConfigureAwait(false);
                 return;
             }
-            if (server.IsAllowed(host)) await MITMHandler.RunAsync(server, conn, host, port, cancel).ConfigureAwait(false);
-            else await TunnelHandler.RunAsync(server, conn, host, port, cancel).ConfigureAwait(false);
+            if (!server.IsAllowed(host))
+            {
+                await TunnelHandler.RunAsync(server, conn, host, port, cancel).ConfigureAwait(false);
+                return;
+            }
+            if (!server.VaultActive)
+            {
+                await RespondVaultLockedAsync(server, conn, host, port, cancel).ConfigureAwait(false);
+                return;
+            }
+            await MITMHandler.RunAsync(server, conn, host, port, cancel).ConfigureAwait(false);
+        }
+
+        public const string VaultLockedMessage = "coffre verrouillé : déverrouillez-le depuis l'app ou la CLI iris";
+
+        /// <summary>Hôte whitelisté, coffre fermé (spec phase 3 §3) : 503 et event error ; jamais de tunnel, le MITM est impossible sans le CA.</summary>
+        private static async Task RespondVaultLockedAsync(ProxyServer server, ClientConnection conn, string host, int port, CancellationToken cancel)
+        {
+            string path = host + ":" + port.ToString(CultureInfo.InvariantCulture);
+            if (server.NoteLockedRefusal()) Log.Warn("proxy", "CONNECT " + path + " refusé (503) : " + VaultLockedMessage);
+            else Log.Debug("proxy", "CONNECT " + path + " refusé (503) : coffre verrouillé");
+            server.Events.Emit(new Event(Guid.NewGuid(), server.Clock(), EventKind.Error, host, "CONNECT", path, 503, 0, null, null, null, EventFlags.None));
+            await WriteSimpleResponseAsync(conn.Http, 503, VaultLockedMessage, cancel).ConfigureAwait(false);
         }
 
         /// <summary>`host:port`, hôte non vide, port 1–65535.</summary>

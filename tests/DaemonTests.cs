@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading;
@@ -35,6 +36,26 @@ namespace Iris.Tests
             return r;
         }
 
+        /// <summary>
+        /// Daemon réel sur des ports libres (services démarrés avant l'invite, phase 3) : attend « coffre déverrouillé » ou la sortie,
+        /// puis Ctrl+C ; rend le code et les sorties.
+        /// </summary>
+        private static RunResult RunLive(ScriptedConsoleInput console, string data, params string[] extra)
+        {
+            WriteTestConfig(data);
+            List<string> args = new List<string> { "--foreground", "--data", data };
+            args.AddRange(extra);
+            LiveDaemon d = StartDaemon(console, args.ToArray());
+            try { WaitFor(delegate { return d.Exit.IsCompleted || d.Out.Snapshot().Contains("coffre déverrouillé"); }, 30000); }
+            finally { d.Cts.Cancel(); }
+            RunResult r = new RunResult();
+            r.Code = d.WaitExit();
+            r.Out = d.Out.Snapshot();
+            r.Err = d.Err.Snapshot();
+            Log.Reset();
+            return r;
+        }
+
         private static void Entry_ArgumentsAndExitCodes()
         {
             RunResult r = RunDaemon(new ScriptedConsoleInput(), "--bogus");
@@ -67,20 +88,20 @@ namespace Iris.Tests
             {
                 string data = Path.Combine(dir, "data");
                 ScriptedConsoleInput console = new ScriptedConsoleInput("maître", "maître");
-                RunResult r = RunDaemon(console, "--foreground", "--data", data, "--log-level", "debug");
+                RunResult r = RunLive(console, data, "--log-level", "debug");
                 Check.Eq(ExitCodes.Ok, r.Code, "démarrage puis arrêt propre : " + r.Err);
                 Check.Eq(2, console.Prompts.Count, "mot de passe et confirmation demandés");
                 Check.True(console.Prompts[0].Contains("nouveau coffre"), "invite de création explicite");
                 foreach (string f in new[] { "config.json", "iris.kdbx", "ca.pem", "events", "backups" })
                     Check.True(File.Exists(Path.Combine(data, f)) || Directory.Exists(Path.Combine(data, f)), "créé : " + f);
-                Check.True(r.Out.Contains("coffre créé") && r.Out.Contains("CA généré") && r.Out.Contains("arrêt demandé avant le démarrage du proxy"), "journal de démarrage");
+                Check.True(r.Out.Contains("coffre absent") && r.Out.Contains("coffre créé") && r.Out.Contains("CA généré") && r.Out.Contains("coffre déverrouillé"), "journal de démarrage : " + r.Out);
                 Check.True(!r.All.Contains("maître"), "le mot de passe n'apparaît nulle part");
                 string pem = File.ReadAllText(Path.Combine(data, "ca.pem"));
 
                 console = new ScriptedConsoleInput("maître");
-                r = RunDaemon(console, "--foreground", "--data", data);
+                r = RunLive(console, data);
                 Check.Eq(ExitCodes.Ok, r.Code, "réouverture");
-                Check.True(console.Prompts.Count == 1 && r.Out.Contains("coffre ouvert") && r.Out.Contains("CA chargé"), "coffre et CA rechargés");
+                Check.True(console.Prompts.Count == 1 && r.Out.Contains("coffre verrouillé") && r.Out.Contains("coffre déverrouillé") && r.Out.Contains("CA chargé"), "coffre et CA rechargés");
                 Check.Eq(pem, File.ReadAllText(Path.Combine(data, "ca.pem")), "ca.pem stable entre deux démarrages");
                 Check.True(!r.Out.Contains("DEBUG"), "aucun avertissement de mode debug");
             }
@@ -93,16 +114,17 @@ namespace Iris.Tests
             try
             {
                 string data = Path.Combine(dir, "data");
-                RunDaemon(new ScriptedConsoleInput("bon", "bon"), "--foreground", "--data", data);
+                RunLive(new ScriptedConsoleInput("bon", "bon"), data);
                 ScriptedConsoleInput console = new ScriptedConsoleInput("mauvais-un", "mauvais-deux", "mauvais-trois");
-                RunResult r = RunDaemon(console, "--foreground", "--data", data);
+                RunResult r = RunLive(console, data);
                 Check.Eq(ExitCodes.Vault, r.Code, "trois échecs → 2");
                 Check.Eq(3, console.Prompts.Count, "trois tentatives");
                 Check.True(r.Err.Contains("refusé") && r.Err.Contains("3/3"), "message clair avec le compte");
+                Check.True(r.Err.Contains("Nouvel essai possible dans"), "délai anti-force brute annoncé");
                 Check.True(!r.All.Contains("mauvais-un") && !r.All.Contains("mauvais-deux") && !r.All.Contains("mauvais-trois") && !r.All.Contains("bon"), "aucun mot de passe dans les sorties");
-                r = RunDaemon(new ScriptedConsoleInput(), "--foreground", "--data", data);
+                r = RunLive(new ScriptedConsoleInput(), data);
                 Check.True(r.Code == ExitCodes.Vault && r.Err.Contains("entrée fermée"), "EOF sur l'invite → 2");
-                r = RunDaemon(new ScriptedConsoleInput("mauvais", "bon"), "--foreground", "--data", data);
+                r = RunLive(new ScriptedConsoleInput("mauvais", "bon"), data);
                 Check.Eq(ExitCodes.Ok, r.Code, "réussite à la deuxième tentative");
             }
             finally { TestDir.Delete(dir); }
@@ -115,10 +137,10 @@ namespace Iris.Tests
             {
                 string data = Path.Combine(dir, "data");
                 // essai 1 : x/y (différents) ; essai 2 : "" (vide, pas de confirmation demandée) ; essai 3 : x/x
-                RunResult r = RunDaemon(new ScriptedConsoleInput("x", "y", "", "x", "x"), "--foreground", "--data", data);
+                RunResult r = RunLive(new ScriptedConsoleInput("x", "y", "", "x", "x"), data);
                 Check.True(r.Code == ExitCodes.Ok && r.Err.Contains("ne correspondent pas") && r.Err.Contains("vide"), "confirmation différente puis vide : nouvelles tentatives, puis création");
                 Check.True(File.Exists(Path.Combine(data, "iris.kdbx")), "coffre créé au troisième essai");
-                r = RunDaemon(new ScriptedConsoleInput("a", "b", "c", "d", "e", "f"), "--foreground", "--data", Path.Combine(dir, "data2"));
+                r = RunLive(new ScriptedConsoleInput("a", "b", "c", "d", "e", "f"), Path.Combine(dir, "data2"));
                 Check.Eq(ExitCodes.Vault, r.Code, "trois confirmations ratées → 2");
                 Check.True(!File.Exists(Path.Combine(dir, "data2", "iris.kdbx")), "aucun coffre créé");
             }

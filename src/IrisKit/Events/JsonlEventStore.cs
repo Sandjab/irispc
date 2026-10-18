@@ -25,6 +25,7 @@ namespace IrisKit
         private DateTime openDay;
 
         public string Directory { get { return dir; } }
+        public int RetentionDays { get { return retentionDays; } }
 
         public JsonlEventStore(string eventsDir, int retentionDays, Func<DateTime> clock)
         {
@@ -91,16 +92,60 @@ namespace IrisKit
             string path = Path.Combine(dir, FileNameFor(day));
             List<Event> result = new List<Event>();
             if (!File.Exists(path)) return result;
-            lock (gate)
+            // Sans le verrou d'Append : le partage ReadWrite suffit, et le proxy ne doit jamais attendre la fin d'un
+            // events.query. Le texte après le dernier '\n' est un event en cours d'écriture : il est ignoré.
+            try
             {
-                foreach (string line in File.ReadAllLines(path, Encoding.UTF8))
+                using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (StreamReader reader = new StreamReader(fs, Encoding.UTF8))
                 {
-                    if (line.Trim().Length == 0) continue;
-                    try { result.Add(Event.FromJson(Json.ParseObject(line))); }
-                    catch (JsonException ex) { Log.Warn("events", "ligne illisible dans " + path + " : " + ex.Message); }
+                    char[] buffer = new char[8192];
+                    StringBuilder line = new StringBuilder();
+                    int n;
+                    while ((n = reader.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        for (int i = 0; i < n; i++)
+                        {
+                            if (buffer[i] != '\n') { line.Append(buffer[i]); continue; }
+                            AddLine(result, line.ToString(), path);
+                            line.Length = 0;
+                        }
+                    }
                 }
             }
+            catch (FileNotFoundException) { }      // purgé ou vidé entre-temps
+            catch (DirectoryNotFoundException) { }
             return result;
+        }
+
+        private static void AddLine(List<Event> result, string line, string path)
+        {
+            if (line.Trim().Length == 0) return;
+            try { result.Add(Event.FromJson(Json.ParseObject(line))); }
+            catch (JsonException ex) { Log.Warn("events", "ligne illisible dans " + path + " : " + ex.Message); }
+        }
+
+        /// <summary>`events.clear` : ferme le fichier du jour et supprime tous les fichiers d'events ; rend le nombre d'events (lignes non vides) supprimés.</summary>
+        public int ClearAll()
+        {
+            lock (gate)
+            {
+                CloseWriter();
+                openDay = DateTime.MinValue;
+                int count = 0;
+                foreach (string path in System.IO.Directory.GetFiles(dir, Prefix + "*" + Extension))
+                {
+                    try
+                    {
+                        foreach (string line in File.ReadAllLines(path, Encoding.UTF8)) if (line.Trim().Length > 0) count++;
+                        File.Delete(path);
+                    }
+                    catch (IOException ex) { Log.Warn("events", "suppression impossible : " + path + " : " + ex.Message); }
+                    catch (UnauthorizedAccessException ex) { Log.Warn("events", "suppression impossible : " + path + " : " + ex.Message); }
+                }
+                Log.Info("events", "journal vidé : " + count + " event(s) supprimé(s)");
+                return count;
+            }
         }
 
         private void CloseWriter()

@@ -1,16 +1,14 @@
 using System;
 using System.IO;
-using System.Net;
-using System.Security;
 using System.Threading;
 using IrisKit;
 
 namespace Irisd
 {
     /// <summary>
-    /// Séquence de démarrage de la spec §7 : data\ → config → events → coffre → CA → proxy → log « irisd ready on … » → attente
-    /// Ctrl+C → arrêt (listener fermé, 5 s de grâce, flush du journal et des métadonnées, feuilles détruites).
-    /// Rend un code de sortie ; n'écrit sur stderr que les erreurs fatales, le reste passe par Log (stdout).
+    /// Séquence de démarrage (spec phase 3 §9) : data\ → config → events → porte du coffre → proxy → SSE → pipe admin →
+    /// « irisd ready » → invite console (sauf --locked ou coffre déjà ouvert) → attente de Ctrl+C → arrêt pipe, SSE, proxy,
+    /// puis coffre et journal. Rend un code de sortie ; stderr ne reçoit que l'invite et les erreurs fatales, le reste passe par Log.
     /// </summary>
     public sealed class Daemon
     {
@@ -47,141 +45,83 @@ namespace Irisd
 
             // 3. events
             EventRing ring = new EventRing(config.Current.Broker.EventRingSize);
-            EventsBus bus = new EventsBus();
             JsonlEventStore eventStore = new JsonlEventStore(Path.Combine(dataDir, "events"), config.Current.Broker.EventRetentionDays, clock);
             eventStore.Purge();
-            EventPipeline events = new EventPipeline(ring, eventStore, bus);
+            EventPipeline events = new EventPipeline(ring, eventStore, new EventsBus());
             if (config.RecoveredFromCorruption)
                 events.Emit(Event.System(clock(), AlertSeverity.High, "config",
                     "config.json corrompu, valeurs par défaut rétablies (copie dans backups\\) : " + config.CorruptionDetail));
 
-            VaultSession session = null;
-            SecretsMetaStore meta = null;
-            SecretCache secrets = null;
-            CAManager ca = null;
-            ProxyServer proxy = null;
+            VaultGate vault = null;
+            DaemonServices services = null;
             PurgeScheduler purge = null;
             try
             {
-                // 4. secrets
-                KeePassVault vault = null;
-                if (options.InMemorySecrets)
-                {
-                    Log.Warn("secrets", "DEBUG : --in-memory-secrets, aucun coffre ouvert, secrets lus depuis IRIS_SECRET_<NAME> / IRIS_SECRET_<NAME>_HOSTS");
-                    InMemorySecretStore memory = new InMemorySecretStore();
-                    int n = EnvSecrets.LoadInto(memory, Environment.GetEnvironmentVariables(), clock());
-                    Log.Info("secrets", n + " secret(s) chargé(s) depuis l'environnement");
-                    secrets = new SecretCache(memory);
-                }
-                else
-                {
-                    session = new VaultSession(dataDir);
-                    int rc;
-                    try { rc = UnlockInteractive(session, clock, cancel); }
-                    catch (OperationCanceledException)
-                    {
-                        stderr.WriteLine("irisd : arrêt demandé pendant la saisie du mot de passe.");
-                        return ExitCodes.Ok;
-                    }
-                    if (rc != ExitCodes.Ok) return rc;
-                    vault = session.Vault;
-                    vault.MaxBackups = config.Current.Backups.MaxCount;
-                    vault.Clock = clock;
-                    meta = new SecretsMetaStore(Path.Combine(dataDir, "secrets-meta.json"), vault.SecretNames, SecretsMetaStore.DefaultDebounce, clock);
-                    secrets = new SecretCache(new KeePassSecretStore(vault, meta));
-                    Log.Info("vault", "coffre ouvert : " + session.KdbxPath + ", " + vault.SecretNames().Count + " secret(s)");
-                }
-
-                // 5. CA
-                ICAKeyStore caStore;
-                if (options.InMemoryCa)
-                {
-                    Log.Warn("ca", "DEBUG : --in-memory-ca, CA régénéré à chaque démarrage, jamais persisté");
-                    caStore = new InMemoryCAKeyStore();
-                }
-                else if (vault == null)
-                {
-                    Log.Warn("ca", "--in-memory-secrets sans coffre ouvert : le CA est aussi éphémère (équivalent à --in-memory-ca)");
-                    caStore = new InMemoryCAKeyStore();
-                }
-                else caStore = new KeePassCAKeyStore(vault);
-                string pemPath = Path.Combine(dataDir, "ca.pem");
-                ca = new CAManager(caStore, pemPath, clock);
-                try { ca.EnsureCA(); }
+                // 4. porte du coffre
+                try { vault = OpenGate(dataDir, clock); }
                 catch (SecretStoreException ex) { stderr.WriteLine("irisd : CA : " + ex.Message); return ExitCodes.Vault; }
+                vault.MaxBackups = config.Current.Backups.MaxCount;
+                if (cancel.IsCancellationRequested) { Log.Info("irisd", "arrêt demandé avant le démarrage des services"); return ExitCodes.Ok; }
 
-                // 6. proxy
-                proxy = new ProxyServer(ProxyOptions.FromConfig(config.Current), secrets, ca, events, clock);
-                if (cancel.IsCancellationRequested) { Log.Info("irisd", "arrêt demandé avant le démarrage du proxy"); return ExitCodes.Ok; }
-                IPEndPoint endpoint;
-                try { endpoint = proxy.Start(); }
-                catch (ProxyPortInUseException ex) { stderr.WriteLine("irisd : " + ex.Message); return ExitCodes.Port; }
-                catch (ProxyException ex) { stderr.WriteLine("irisd : " + ex.Message); return ExitCodes.Data; }
+                // 5. proxy, flux SSE, pipe admin
+                services = new DaemonServices(config, vault, events, clock);
+                int rc = services.Start(stderr);
+                if (rc != ExitCodes.Ok) return rc;
                 purge = new PurgeScheduler(eventStore, clock);
+                Log.Info("irisd", "irisd ready on " + services.Proxy.ListenEndPoint + ", events " + services.Sse.ListenEndPoint
+                    + ", pipe \\\\.\\pipe\\" + config.Current.Broker.AdminPipe + ", coffre " + StateLabel(vault.State)
+                    + ", ca=" + vault.PemPath + ". Ctrl+C pour arrêter.");
 
-                // 7. prêt
-                Log.Info("irisd", "irisd ready on " + endpoint + ", ca=" + pemPath + " (empreinte " + ca.Info.FingerprintSha256 + "). Ctrl+C pour arrêter.");
+                // 6. invite console
+                if (!options.Locked && vault.State != VaultState.Unlocked)
+                {
+                    int code = new ConsoleUnlock(vault, console, stderr).Run(cancel);
+                    if (code != ExitCodes.Ok) return code;
+                }
+
+                // 7. attente
                 cancel.WaitHandle.WaitOne();
                 Log.Info("irisd", "arrêt demandé");
-                proxy.StopAsync().GetAwaiter().GetResult();
                 return ExitCodes.Ok;
             }
             finally
             {
                 if (purge != null) purge.Dispose();
-                if (proxy != null) proxy.Dispose();
-                if (secrets != null) secrets.Clear();
-                if (meta != null) meta.Dispose();
-                if (ca != null) ca.Dispose();
-                if (session != null) session.Dispose();
+                if (services != null) services.Dispose();
+                if (vault != null) vault.Dispose();
                 eventStore.Dispose();
             }
         }
 
-        /// <summary>Création (mot de passe + confirmation) ou ouverture ; trois échecs ou entrée fermée → code 2 ; Ctrl+C → OperationCanceledException (code 0 chez l'appelant).</summary>
-        private int UnlockInteractive(VaultSession session, Func<DateTime> clock, CancellationToken cancel)
+        /// <summary>Porte KeePass (CA dans le coffre, ou éphémère avec --in-memory-ca), ou porte en mémoire ouverte d'emblée (--in-memory-secrets).</summary>
+        private VaultGate OpenGate(string dataDir, Func<DateTime> clock)
         {
-            if (!session.Exists)
+            if (options.InMemorySecrets)
             {
-                stderr.WriteLine("Aucun coffre dans " + session.KdbxPath + " : création d'un nouveau coffre KeePass.");
-                for (int attempt = 1; attempt <= MaxPasswordAttempts; attempt++)
-                {
-                    SecureString first = console.ReadPassword("Mot de passe maître du nouveau coffre : ", cancel);
-                    if (first == null) return Closed();
-                    if (first.Length == 0) { stderr.WriteLine("Le mot de passe ne peut pas être vide (" + attempt + "/" + MaxPasswordAttempts + ")."); continue; }
-                    SecureString second = console.ReadPassword("Confirmez le mot de passe maître : ", cancel);
-                    if (second == null) return Closed();
-                    if (!SecureStrings.Equal(first, second)) { stderr.WriteLine("Les deux saisies ne correspondent pas (" + attempt + "/" + MaxPasswordAttempts + ")."); continue; }
-                    try { session.Create(first, clock()); return ExitCodes.Ok; }
-                    catch (SecretStoreException ex) { stderr.WriteLine("irisd : création du coffre impossible : " + ex.Message); return ExitCodes.Vault; }
-                }
-                stderr.WriteLine("Trois échecs : arrêt sans créer de coffre.");
-                return ExitCodes.Vault;
+                Log.Warn("secrets", "DEBUG : --in-memory-secrets, aucun coffre ouvert, secrets lus depuis IRIS_SECRET_<NAME> / IRIS_SECRET_<NAME>_HOSTS");
+                InMemorySecretStore memory = new InMemorySecretStore();
+                int n = EnvSecrets.LoadInto(memory, Environment.GetEnvironmentVariables(), clock());
+                Log.Info("secrets", n + " secret(s) chargé(s) depuis l'environnement");
+                if (options.InMemoryCa) Log.Warn("ca", "DEBUG : --in-memory-ca, CA régénéré à chaque démarrage, jamais persisté");
+                else Log.Warn("ca", "--in-memory-secrets sans coffre ouvert : le CA est aussi éphémère (équivalent à --in-memory-ca)");
+                return VaultGate.InMemory(dataDir, memory, clock);
             }
-            for (int attempt = 1; attempt <= MaxPasswordAttempts; attempt++)
+            bool memoryCa = options.InMemoryCa;
+            if (memoryCa) Log.Warn("ca", "DEBUG : --in-memory-ca, CA régénéré à chaque démarrage, jamais persisté");
+            return new VaultGate(dataDir, delegate(KeePassVault v)
             {
-                SecureString password = console.ReadPassword("Mot de passe maître (" + session.KdbxPath + ") : ", cancel);
-                if (password == null) return Closed();
-                try { session.Unlock(password); return ExitCodes.Ok; }
-                catch (SecretStoreException ex)
-                {
-                    if (ex.Kind == SecretStoreErrorKind.VaultLocked)
-                    {
-                        stderr.WriteLine("Mot de passe refusé (" + attempt + "/" + MaxPasswordAttempts + ").");
-                        continue;
-                    }
-                    stderr.WriteLine("irisd : " + ex.Message);
-                    return ExitCodes.Vault;
-                }
-            }
-            stderr.WriteLine("Trois échecs : arrêt.");
-            return ExitCodes.Vault;
+                return memoryCa ? (ICAKeyStore)new InMemoryCAKeyStore() : new KeePassCAKeyStore(v);
+            }, clock);
         }
 
-        private int Closed()
+        private static string StateLabel(VaultState state)
         {
-            stderr.WriteLine("irisd : entrée fermée pendant la saisie du mot de passe, arrêt.");
-            return ExitCodes.Vault;
+            switch (state)
+            {
+                case VaultState.Absent: return "absent";
+                case VaultState.Locked: return "verrouillé";
+                default: return "ouvert";
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -104,6 +105,76 @@ namespace IrisKit
                 }
                 WriteAtomic(config);
                 Current = config;
+            }
+        }
+
+        // ---- Mutations du daemon (spec phase 3 §7) : read-modify-write sous le même verrou que Save ----
+
+        /// <summary>`config.set` : lot atomique (validation par Save avant toute écriture).</summary>
+        public ConfigSetResult ApplyUpdates(IList<KeyValuePair<string, string>> updates, DateTime now)
+        {
+            lock (gate)
+            {
+                ConfigSetResult result;
+                Config next = ConfigUpdates.Apply(Current, updates, out result);
+                Save(next, now);
+                return result;
+            }
+        }
+
+        /// <summary>`rule.add` : hôte normalisé et validé ; déjà présent → règle existante, sans écriture.</summary>
+        public MITMRule AddHost(string host, DateTime now)
+        {
+            string h = HostName.Normalize(host);
+            if (!HostName.IsValid(h)) throw new ConfigException("hosts.host", host ?? "null");
+            lock (gate)
+            {
+                foreach (MITMRule r in Current.Hosts) if (r.Host == h) return r;
+                List<MITMRule> hosts = new List<MITMRule>(Current.Hosts);
+                MITMRule rule = new MITMRule(h, now, RuleOrigin.User);
+                hosts.Add(rule);
+                Save(Current.WithHosts(hosts), now);
+                return rule;
+            }
+        }
+
+        /// <summary>`rule.delete` : false si absent ; hôte `origin: default` → ConfigHostProtectedException.</summary>
+        public bool DeleteHost(string host, DateTime now)
+        {
+            string h = HostName.Normalize(host);
+            lock (gate)
+            {
+                List<MITMRule> hosts = new List<MITMRule>(Current.Hosts);
+                int index = hosts.FindIndex(delegate(MITMRule r) { return r.Host == h; });
+                if (index < 0) return false;
+                if (hosts[index].Origin == RuleOrigin.Default) throw new ConfigHostProtectedException(h);
+                hosts.RemoveAt(index);
+                Save(Current.WithHosts(hosts), now);
+                return true;
+            }
+        }
+
+        /// <summary>`config.reload` : relit et valide config.json ; en cas d'erreur Current est inchangé (pas de re-seed, contrairement au démarrage). Rend les champs structurels modifiés.</summary>
+        public IList<string> Reload()
+        {
+            lock (gate)
+            {
+                Config loaded;
+                try
+                {
+                    string text = File.ReadAllText(Path, Encoding.UTF8);
+                    loaded = Config.FromJson(Json.ParseObject(text));
+                    loaded.Validate();
+                }
+                catch (Exception ex)
+                {
+                    if (ex is IOException || ex is UnauthorizedAccessException || ex is JsonException || ex is ConfigException)
+                        throw new ConfigReloadException(ex.Message, ex);
+                    throw;
+                }
+                IList<string> ignored = ConfigUpdates.StructuralChanges(Current, loaded);
+                Current = loaded;
+                return ignored;
             }
         }
 
