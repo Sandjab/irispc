@@ -168,6 +168,11 @@ namespace Iris.Tests
             Check.Run("Pipe : ACL utilisateur courant, NETWORK refusé", AdminPipe_SecurityDescriptor);
             Check.Run("Pipe : Stop avec un client inactif", AdminPipe_StopReleasesName);
             Check.Run("Pipe : Stop ne laisse jamais d'instance derrière lui", AdminPipe_StopRaceNeverLeaksInstance);
+            Check.Run("Dispatcher : enveloppes et erreurs standard", Dispatcher_EnvelopeErrors);
+            Check.Run("Dispatcher : secret.* sans jamais de valeur", Dispatcher_SecretMethods);
+            Check.Run("Dispatcher : secret.* refusées coffre fermé (-32020)", Dispatcher_VaultLockedRefusals);
+            Check.Run("Dispatcher : vault.status / unlock / create", Dispatcher_VaultMethods);
+            Check.Run("Dispatcher : logs sans paramètres", Dispatcher_LogsMethodNeverParams);
 
             return Check.Summary();
         }
