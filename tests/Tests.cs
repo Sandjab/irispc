@@ -161,6 +161,12 @@ namespace Iris.Tests
             Check.Run("Porte : Activate active le MITM sans redémarrer", ProxyGate_ActivateEnablesMITMWithoutRestart);
             Check.Run("Porte : UpdateSecurity à chaud", ProxyGate_UpdateSecurityHot);
             Check.Run("Porte : bind, InUse et AccessDenied distincts", PortBinding_Translate);
+            Check.Run("Pipe : requêtes successives et clients concurrents", AdminPipe_RoundTripSequentialAndConcurrent);
+            Check.Run("Pipe : second serveur refusé (FIRST_PIPE_INSTANCE)", AdminPipe_SecondServerRefused);
+            Check.Run("Pipe : identité du serveur vérifiée avant tout envoi", AdminPipe_IdentityChecked);
+            Check.Run("Pipe : trame trop grande ou tronquée", AdminPipe_OversizeAndTruncatedFrames);
+            Check.Run("Pipe : ACL utilisateur courant, NETWORK refusé", AdminPipe_SecurityDescriptor);
+            Check.Run("Pipe : Stop avec un client inactif", AdminPipe_StopReleasesName);
 
             return Check.Summary();
         }
