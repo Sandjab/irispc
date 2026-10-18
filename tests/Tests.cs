@@ -148,6 +148,10 @@ namespace Iris.Tests
             Check.Run("IPC : trames, aller-retour et plafonds", Frame_RoundTripAndLimits);
             Check.Run("IPC : décodage des requêtes JSON-RPC", JsonRpc_ParseRequest);
             Check.Run("IPC : enveloppes de réponse et côté client", JsonRpc_Envelopes);
+            Check.Run("Config : config.set à chaud et structurel", Config_ApplyUpdates_HotAndStructural);
+            Check.Run("Config : config.set atomique en cas d'erreur", Config_ApplyUpdates_AtomicOnError);
+            Check.Run("Config : rule.add / rule.delete", Config_Hosts_AddDelete);
+            Check.Run("Config : config.reload", Config_Reload);
 
             return Check.Summary();
         }
