@@ -177,6 +177,15 @@ namespace Iris.Tests
             Check.Run("Méthodes : daemon.status / stats / pause / resume", Methods_DaemonStatusAndPause);
             Check.Run("Méthodes : events.query (ring + journal) et events.clear", Methods_EventsQueryAndClear);
             Check.Run("Méthodes : ca.export_path / fingerprint / is_trusted", Methods_CA);
+            Check.Run("SSE : en-têtes, connected, event en direct", Sse_StreamsLiveEventsWithHeaders);
+            Check.Run("SSE : backlog since sans doublon", Sse_SinceBacklogNoDuplicates);
+            Check.Run("SSE : filtres kind et host", Sse_FiltersKindAndHost);
+            Check.Run("SSE : ping périodique", Sse_Ping);
+            Check.Run("SSE : 404, 405, 400", Sse_Errors);
+            Check.Run("SSE : 32 abonnés au plus (503)", Sse_SubscriberLimit);
+            Check.Run("SSE : abonné lent → dropped, Emit jamais bloqué", Sse_SlowConsumerDropped);
+            Check.Run("SSE : bouclage seul, port occupé", Sse_LoopbackAndPortInUse);
+            Check.Run("SSE : Stop ferme les abonnés", Sse_StopClosesSubscribers);
 
             return Check.Summary();
         }
