@@ -73,7 +73,7 @@ namespace Iris.Tests
                 Check.True(console.Prompts[0].Contains("nouveau coffre"), "invite de création explicite");
                 foreach (string f in new[] { "config.json", "iris.kdbx", "ca.pem", "events", "backups" })
                     Check.True(File.Exists(Path.Combine(data, f)) || Directory.Exists(Path.Combine(data, f)), "créé : " + f);
-                Check.True(r.Out.Contains("coffre créé") && r.Out.Contains("CA généré") && r.Out.Contains("prêt"), "journal de démarrage");
+                Check.True(r.Out.Contains("coffre créé") && r.Out.Contains("CA généré") && r.Out.Contains("arrêt demandé avant le démarrage du proxy"), "journal de démarrage");
                 Check.True(!r.All.Contains("maître"), "le mot de passe n'apparaît nulle part");
                 string pem = File.ReadAllText(Path.Combine(data, "ca.pem"));
 

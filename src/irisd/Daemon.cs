@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net;
 using System.Security;
 using System.Threading;
 using IrisKit;
@@ -7,7 +8,8 @@ using IrisKit;
 namespace Irisd
 {
     /// <summary>
-    /// Séquence de démarrage de la spec §7 (phase 1, sans proxy) : data\ → config → events → coffre → CA → attente → arrêt propre.
+    /// Séquence de démarrage de la spec §7 : data\ → config → events → coffre → CA → proxy → log « irisd ready on … » → attente
+    /// Ctrl+C → arrêt (listener fermé, 5 s de grâce, flush du journal et des métadonnées, feuilles détruites).
     /// Rend un code de sortie ; n'écrit sur stderr que les erreurs fatales, le reste passe par Log (stdout).
     /// </summary>
     public sealed class Daemon
@@ -57,6 +59,8 @@ namespace Irisd
             SecretsMetaStore meta = null;
             SecretCache secrets = null;
             CAManager ca = null;
+            ProxyServer proxy = null;
+            PurgeScheduler purge = null;
             try
             {
                 // 4. secrets
@@ -72,7 +76,13 @@ namespace Irisd
                 else
                 {
                     session = new VaultSession(dataDir);
-                    int rc = UnlockInteractive(session, clock);
+                    int rc;
+                    try { rc = UnlockInteractive(session, clock, cancel); }
+                    catch (OperationCanceledException)
+                    {
+                        stderr.WriteLine("irisd : arrêt demandé pendant la saisie du mot de passe.");
+                        return ExitCodes.Ok;
+                    }
                     if (rc != ExitCodes.Ok) return rc;
                     vault = session.Vault;
                     vault.MaxBackups = config.Current.Backups.MaxCount;
@@ -95,18 +105,31 @@ namespace Irisd
                     caStore = new InMemoryCAKeyStore();
                 }
                 else caStore = new KeePassCAKeyStore(vault);
-                ca = new CAManager(caStore, Path.Combine(dataDir, "ca.pem"), clock);
+                string pemPath = Path.Combine(dataDir, "ca.pem");
+                ca = new CAManager(caStore, pemPath, clock);
                 try { ca.EnsureCA(); }
                 catch (SecretStoreException ex) { stderr.WriteLine("irisd : CA : " + ex.Message); return ExitCodes.Vault; }
 
-                // 6. prêt (phase 1 : pas de proxy)
-                Log.Info("irisd", "prêt (phase 1 : proxy non démarré). ca=" + Path.Combine(dataDir, "ca.pem") + " empreinte=" + ca.Info.FingerprintSha256 + ". Ctrl+C pour arrêter.");
+                // 6. proxy
+                proxy = new ProxyServer(ProxyOptions.FromConfig(config.Current), secrets, ca, events, clock);
+                if (cancel.IsCancellationRequested) { Log.Info("irisd", "arrêt demandé avant le démarrage du proxy"); return ExitCodes.Ok; }
+                IPEndPoint endpoint;
+                try { endpoint = proxy.Start(); }
+                catch (ProxyPortInUseException ex) { stderr.WriteLine("irisd : " + ex.Message); return ExitCodes.Port; }
+                catch (ProxyException ex) { stderr.WriteLine("irisd : " + ex.Message); return ExitCodes.Data; }
+                purge = new PurgeScheduler(eventStore, clock);
+
+                // 7. prêt
+                Log.Info("irisd", "irisd ready on " + endpoint + ", ca=" + pemPath + " (empreinte " + ca.Info.FingerprintSha256 + "). Ctrl+C pour arrêter.");
                 cancel.WaitHandle.WaitOne();
                 Log.Info("irisd", "arrêt demandé");
+                proxy.StopAsync().GetAwaiter().GetResult();
                 return ExitCodes.Ok;
             }
             finally
             {
+                if (purge != null) purge.Dispose();
+                if (proxy != null) proxy.Dispose();
                 if (secrets != null) secrets.Clear();
                 if (meta != null) meta.Dispose();
                 if (ca != null) ca.Dispose();
@@ -115,18 +138,18 @@ namespace Irisd
             }
         }
 
-        /// <summary>Création (mot de passe + confirmation) ou ouverture ; trois échecs consécutifs ou entrée fermée → code 2.</summary>
-        private int UnlockInteractive(VaultSession session, Func<DateTime> clock)
+        /// <summary>Création (mot de passe + confirmation) ou ouverture ; trois échecs ou entrée fermée → code 2 ; Ctrl+C → OperationCanceledException (code 0 chez l'appelant).</summary>
+        private int UnlockInteractive(VaultSession session, Func<DateTime> clock, CancellationToken cancel)
         {
             if (!session.Exists)
             {
                 stderr.WriteLine("Aucun coffre dans " + session.KdbxPath + " : création d'un nouveau coffre KeePass.");
                 for (int attempt = 1; attempt <= MaxPasswordAttempts; attempt++)
                 {
-                    SecureString first = console.ReadPassword("Mot de passe maître du nouveau coffre : ");
+                    SecureString first = console.ReadPassword("Mot de passe maître du nouveau coffre : ", cancel);
                     if (first == null) return Closed();
                     if (first.Length == 0) { stderr.WriteLine("Le mot de passe ne peut pas être vide (" + attempt + "/" + MaxPasswordAttempts + ")."); continue; }
-                    SecureString second = console.ReadPassword("Confirmez le mot de passe maître : ");
+                    SecureString second = console.ReadPassword("Confirmez le mot de passe maître : ", cancel);
                     if (second == null) return Closed();
                     if (!SecureStrings.Equal(first, second)) { stderr.WriteLine("Les deux saisies ne correspondent pas (" + attempt + "/" + MaxPasswordAttempts + ")."); continue; }
                     try { session.Create(first, clock()); return ExitCodes.Ok; }
@@ -137,7 +160,7 @@ namespace Irisd
             }
             for (int attempt = 1; attempt <= MaxPasswordAttempts; attempt++)
             {
-                SecureString password = console.ReadPassword("Mot de passe maître (" + session.KdbxPath + ") : ");
+                SecureString password = console.ReadPassword("Mot de passe maître (" + session.KdbxPath + ") : ", cancel);
                 if (password == null) return Closed();
                 try { session.Unlock(password); return ExitCodes.Ok; }
                 catch (SecretStoreException ex)
