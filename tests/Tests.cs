@@ -152,6 +152,11 @@ namespace Iris.Tests
             Check.Run("Config : config.set atomique en cas d'erreur", Config_ApplyUpdates_AtomicOnError);
             Check.Run("Config : rule.add / rule.delete", Config_Hosts_AddDelete);
             Check.Run("Config : config.reload", Config_Reload);
+            Check.Run("VaultGate : absent, création, déverrouillage, délai", VaultGate_AbsentCreateThenUnlock);
+            Check.Run("VaultGate : délai exponentiel plafonné à 60 s", VaultGate_DelayDoublesAndCaps);
+            Check.Run("VaultGate : tentatives concurrentes", VaultGate_ConcurrentWrongAttempts);
+            Check.Run("VaultGate : échec du CA, porte fermée", VaultGate_CAFailureStaysLocked);
+            Check.Run("VaultGate : mode --in-memory-secrets", VaultGate_InMemory);
 
             return Check.Summary();
         }
