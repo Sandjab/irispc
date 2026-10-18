@@ -145,6 +145,9 @@ namespace Iris.Tests
             Check.Run("Revue : valeur non ASCII octet pour octet dans les en-têtes", Fix_Engine_NonAsciiValueKeepsUtf8BytesInHeaders);
             Check.Run("Revue : Transfer-Encoding non chunked-final rejeté", Fix_Http_TransferEncodingNonChunkedRejected);
             Check.Run("Revue : corps chunked trop grand sans Content-Length", Fix_MITM_LargeChunkedBody_DropsContentLength);
+            Check.Run("IPC : trames, aller-retour et plafonds", Frame_RoundTripAndLimits);
+            Check.Run("IPC : décodage des requêtes JSON-RPC", JsonRpc_ParseRequest);
+            Check.Run("IPC : enveloppes de réponse et côté client", JsonRpc_Envelopes);
 
             return Check.Summary();
         }
