@@ -55,7 +55,14 @@ namespace IrisKit
         {
             while (true)
             {
-                Track(listening);
+                if (!Track(listening))
+                {
+                    // Stop est passé entre la création de l'instance et son suivi : elle ne doit pas lui survivre
+                    try { listening.Dispose(); }
+                    catch (IOException) { }
+                    slots.Release();
+                    return;
+                }
                 Exception waitError = null;
                 try { await Task.Factory.FromAsync(listening.BeginWaitForConnection, listening.EndWaitForConnection, null).ConfigureAwait(false); }
                 catch (Exception ex) { waitError = ex; }
@@ -114,9 +121,15 @@ namespace IrisKit
             finally { Release(pipe); }
         }
 
-        private void Track(NamedPipeServerStream pipe)
+        /// <summary>Suit une instance pour que Stop la ferme ; faux si Stop a déjà photographié les instances.</summary>
+        private bool Track(NamedPipeServerStream pipe)
         {
-            lock (gate) { open.Add(pipe); }
+            lock (gate)
+            {
+                if (stopped) return false;
+                open.Add(pipe);
+                return true;
+            }
         }
 
         /// <summary>Ferme une instance et rend son créneau (une seule fois par instance suivie).</summary>
@@ -132,16 +145,17 @@ namespace IrisKit
         /// <summary>Ferme toutes les instances (connexions en cours abandonnées) et attend la fin des tâches, 2 s au plus.</summary>
         public void Stop()
         {
-            if (stopping == null || stopped) return;
-            stopped = true;
-            stopping.Cancel();
+            if (stopping == null) return;
             List<NamedPipeServerStream> snapshot;
             List<Task> pending;
             lock (gate)
             {
+                if (stopped) return;
+                stopped = true; // sous le verrou : Track refuse toute instance créée après la photographie
                 snapshot = new List<NamedPipeServerStream>(open);
                 pending = new List<Task>(tasks);
             }
+            stopping.Cancel();
             foreach (NamedPipeServerStream pipe in snapshot)
             {
                 try { pipe.Dispose(); }

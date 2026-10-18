@@ -159,6 +159,31 @@ namespace Iris.Tests
             Check.True(denyNetwork, "refus explicite du SID NETWORK");
         }
 
+        /// <summary>
+        /// Course Stop / boucle d'acceptation : l'instance d'écoute recréée juste après une connexion ne doit jamais
+        /// survivre à Stop (sinon le nom reste pris et le redémarrage échoue en « existe déjà »).
+        /// </summary>
+        private static void AdminPipe_StopRaceNeverLeaksInstance()
+        {
+            string name = TestPipeName();
+            for (int i = 0; i < 40; i++)
+            {
+                AdminServer server = new AdminServer(name, new EchoHandler().Handle);
+                server.Start();
+                AdminClient idle = AdminClient.Connect(name, SelfPath(), TimeSpan.FromSeconds(5));
+                server.Stop();
+                idle.Dispose();
+                AdminServer again = new AdminServer(name, new EchoHandler().Handle);
+                try { again.Start(); }
+                catch (AdminPipeInUseException)
+                {
+                    Check.True(false, "instance du pipe survivante après Stop (itération " + i + ")");
+                    return;
+                }
+                finally { again.Dispose(); }
+            }
+        }
+
         private static void AdminPipe_StopReleasesName()
         {
             string name = TestPipeName();

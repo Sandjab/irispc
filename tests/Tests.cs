@@ -167,6 +167,7 @@ namespace Iris.Tests
             Check.Run("Pipe : trame trop grande ou tronquée", AdminPipe_OversizeAndTruncatedFrames);
             Check.Run("Pipe : ACL utilisateur courant, NETWORK refusé", AdminPipe_SecurityDescriptor);
             Check.Run("Pipe : Stop avec un client inactif", AdminPipe_StopReleasesName);
+            Check.Run("Pipe : Stop ne laisse jamais d'instance derrière lui", AdminPipe_StopRaceNeverLeaksInstance);
 
             return Check.Summary();
         }
