@@ -37,13 +37,17 @@ namespace IrisKit
     {
         public ProxyOptions Options { get; private set; }
         public IPEndPoint ListenEndPoint { get; private set; }
-        public LeafCertCache Leaves { get; private set; }
         public EventPipeline Events { get; private set; }
-        public ISecretStore Secrets { get; private set; }
         public UpstreamClient Upstream { get; private set; }
         public Func<DateTime> Clock { get; private set; }
-        /// <summary>Scan → règles → substitution ; construit par le serveur à partir d'Options.Security.</summary>
-        public RequestProcessor Processor { get; private set; }
+        /// <summary>Feuilles par hôte ; null tant que le coffre est fermé.</summary>
+        public LeafCertCache Leaves { get { return leaves; } }
+        /// <summary>Magasin de secrets ; null tant que le coffre est fermé.</summary>
+        public ISecretStore Secrets { get { return secrets; } }
+        /// <summary>Scan → règles → substitution ; null tant que le coffre est fermé.</summary>
+        public RequestProcessor Processor { get { return processor; } }
+        /// <summary>Coffre et CA branchés : le MITM est possible (spec phase 3 §3).</summary>
+        public bool VaultActive { get { return processor != null; } }
 
         private readonly object gate = new object();
         private readonly HashSet<ClientConnection> connections = new HashSet<ClientConnection>();
@@ -53,28 +57,66 @@ namespace IrisKit
         private TcpListener listener;
         private CancellationTokenSource stopping;
         private Task acceptLoop;
+        private volatile LeafCertCache leaves;
+        private volatile ISecretStore secrets;
+        private volatile RequestProcessor processor;
+        private int lockedRefusals;
 
-        public ProxyServer(ProxyOptions options, ISecretStore secrets, CAManager ca, EventPipeline events, Func<DateTime> clock)
+        /// <summary>Proxy verrouillé (spec phase 3 §3) : tunnel pour tout hôte hors whitelist, 503 pour la whitelist jusqu'à Activate.</summary>
+        public ProxyServer(ProxyOptions options, EventPipeline events, Func<DateTime> clock)
         {
             if (options == null) throw new ArgumentNullException("options");
-            if (secrets == null) throw new ArgumentNullException("secrets");
-            if (ca == null) throw new ArgumentNullException("ca");
             if (events == null) throw new ArgumentNullException("events");
             Options = options;
-            Secrets = secrets;
             Events = events;
             Clock = clock;
-            Leaves = new LeafCertCache(ca, clock);
             Upstream = new UpstreamClient(options.UpstreamTrust, options.ConnectTimeout);
             allowed = new HashSet<string>(StringComparer.Ordinal);
             foreach (string h in options.AllowedHosts) allowed.Add(HostName.Normalize(h));
-            ProxyServer self = this;
-            Processor = new RequestProcessor(secrets,
-                delegate { return self.Options.Security.MaxSubstitutionsPerMinute; },
-                delegate { return self.Options.Security.OnExfilAttempt; },
-                delegate { self.SetPaused(true); },
-                clock);
         }
+
+        /// <summary>Proxy actif d'emblée (tests, phase 2).</summary>
+        public ProxyServer(ProxyOptions options, ISecretStore secrets, CAManager ca, EventPipeline events, Func<DateTime> clock)
+            : this(options, events, clock)
+        {
+            if (secrets == null) throw new ArgumentNullException("secrets");
+            if (ca == null) throw new ArgumentNullException("ca");
+            Activate(secrets, ca);
+        }
+
+        /// <summary>Branche coffre et CA (au démarrage ou au déverrouillage) ; idempotent ; vaut pour toute nouvelle connexion.</summary>
+        public void Activate(ISecretStore secretStore, CAManager ca)
+        {
+            if (secretStore == null) throw new ArgumentNullException("secretStore");
+            if (ca == null) throw new ArgumentNullException("ca");
+            lock (gate)
+            {
+                if (processor != null) return;
+                ProxyServer self = this;
+                LeafCertCache l = new LeafCertCache(ca, Clock);
+                RequestProcessor p = new RequestProcessor(secretStore,
+                    delegate { return self.Options.Security.MaxSubstitutionsPerMinute; },
+                    delegate { return self.Options.Security.OnExfilAttempt; },
+                    delegate { self.SetPaused(true); },
+                    Clock);
+                secrets = secretStore;
+                leaves = l;
+                processor = p; // en dernier : VaultActive ne passe à vrai qu'une fois tout prêt
+            }
+        }
+
+        /// <summary>`security.*` à chaud (spec phase 3 §7) : validée, puis lue par RequestProcessor à la requête suivante.</summary>
+        public void UpdateSecurity(SecurityConfig security)
+        {
+            if (security == null) throw new ArgumentNullException("security");
+            security.Validate();
+            Options.Security = security;
+            Log.Info("proxy", "sécurité mise à jour : on_exfil_attempt=" + ExfilPolicyWire.ToWire(security.OnExfilAttempt)
+                + ", max_substitutions_per_minute=" + security.MaxSubstitutionsPerMinute);
+        }
+
+        /// <summary>Vrai au premier refus « coffre verrouillé » (log warn), faux ensuite (log debug).</summary>
+        public bool NoteLockedRefusal() { return Interlocked.Increment(ref lockedRefusals) == 1; }
 
         // ---- Whitelist et pause ----------------------------------------------
 
@@ -105,13 +147,7 @@ namespace IrisKit
             Options.Validate();
             if (listener != null) throw new ProxyException("proxy déjà démarré");
             TcpListener l = new TcpListener(IPAddress.Parse(Options.ListenHost), Options.ListenPort);
-            try { l.Start(64); }
-            catch (SocketException ex)
-            {
-                if (ex.SocketErrorCode == SocketError.AddressAlreadyInUse || ex.SocketErrorCode == SocketError.AccessDenied)
-                    throw new ProxyPortInUseException(Options.ListenPort, ex);
-                throw new ProxyException("écoute sur " + Options.ListenHost + ":" + Options.ListenPort + " impossible : " + ex.Message, ex);
-            }
+            PortBinding.Start(l, 64, "proxy", Options.ListenPort);
             listener = l;
             ListenEndPoint = (IPEndPoint)l.LocalEndpoint;
             stopping = new CancellationTokenSource();
@@ -177,14 +213,16 @@ namespace IrisKit
             try { await acceptLoop.ConfigureAwait(false); } catch (Exception) { }
             lock (gate) { tasks.Clear(); connections.Clear(); }
             listener = null;
-            Leaves.Dispose();
+            LeafCertCache l = leaves;
+            if (l != null) l.Dispose();
             Log.Info("proxy", "arrêté");
         }
 
         public void Dispose()
         {
-            if (listener != null) StopAsync().GetAwaiter().GetResult();
-            else Leaves.Dispose();
+            if (listener != null) { StopAsync().GetAwaiter().GetResult(); return; }
+            LeafCertCache l = leaves;
+            if (l != null) l.Dispose();
         }
     }
 }

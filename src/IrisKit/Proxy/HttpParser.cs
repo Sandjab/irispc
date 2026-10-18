@@ -147,8 +147,10 @@ namespace IrisKit
                 case 100: return "100 Continue";
                 case 200: return "200 OK";
                 case 400: return "400 Bad Request";
+                case 404: return "404 Not Found";
                 case 405: return "405 Method Not Allowed";
                 case 502: return "502 Bad Gateway";
+                case 503: return "503 Service Unavailable";
                 default: return status.ToString(CultureInfo.InvariantCulture) + " Status";
             }
         }

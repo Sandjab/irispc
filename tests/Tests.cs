@@ -157,6 +157,10 @@ namespace Iris.Tests
             Check.Run("VaultGate : tentatives concurrentes", VaultGate_ConcurrentWrongAttempts);
             Check.Run("VaultGate : échec du CA, porte fermée", VaultGate_CAFailureStaysLocked);
             Check.Run("VaultGate : mode --in-memory-secrets", VaultGate_InMemory);
+            Check.Run("Porte : coffre fermé → 503 pour la whitelist, tunnel sinon", ProxyGate_LockedRefusesWhitelistedTunnelsOthers);
+            Check.Run("Porte : Activate active le MITM sans redémarrer", ProxyGate_ActivateEnablesMITMWithoutRestart);
+            Check.Run("Porte : UpdateSecurity à chaud", ProxyGate_UpdateSecurityHot);
+            Check.Run("Porte : bind, InUse et AccessDenied distincts", PortBinding_Translate);
 
             return Check.Summary();
         }

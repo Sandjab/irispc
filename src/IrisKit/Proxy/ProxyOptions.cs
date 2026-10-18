@@ -11,14 +11,13 @@ namespace IrisKit
         public ProxyException(string message, Exception inner) : base(message, inner) { }
     }
 
-    /// <summary>Port d'écoute déjà pris : irisd sort avec le code 3 (spec §7).</summary>
-    public sealed class ProxyPortInUseException : ProxyException
+    /// <summary>Port du proxy déjà pris : irisd sort avec le code 3 (spec §7).</summary>
+    public sealed class ProxyPortInUseException : PortBindException
     {
-        public int Port { get; private set; }
         public ProxyPortInUseException(int port, Exception inner)
-            : base("le port " + port.ToString(CultureInfo.InvariantCulture) + " est déjà utilisé : un autre irisd tourne, ou un autre programme écoute dessus", inner)
+            : base(PortBindFailure.InUse, "proxy", port,
+                "le port " + port.ToString(CultureInfo.InvariantCulture) + " est déjà utilisé : un autre irisd tourne, ou un autre programme écoute dessus", inner)
         {
-            Port = port;
         }
     }
 

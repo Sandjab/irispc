@@ -49,7 +49,7 @@ namespace Iris.Tests
             if (head.Status != 200)
             {
                 BufferedBody body = await HttpParser.ReadBodyAsync(plain, HttpParser.ResponseFraming(head.Headers, "CONNECT", head.Status), 65536, CancellationToken.None);
-                LastErrorBody = HttpParser.Latin1.GetString(body.Bytes);
+                LastErrorBody = Encoding.UTF8.GetString(body.Bytes); // WriteSimpleResponseAsync annonce charset=utf-8
             }
             return head.Status;
         }
