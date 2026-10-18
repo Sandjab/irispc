@@ -92,21 +92,37 @@ namespace IrisKit
             string path = Path.Combine(dir, FileNameFor(day));
             List<Event> result = new List<Event>();
             if (!File.Exists(path)) return result;
-            lock (gate)
+            // Sans le verrou d'Append : le partage ReadWrite suffit, et le proxy ne doit jamais attendre la fin d'un
+            // events.query. Le texte après le dernier '\n' est un event en cours d'écriture : il est ignoré.
+            try
             {
                 using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 using (StreamReader reader = new StreamReader(fs, Encoding.UTF8))
                 {
-                    string line;
-                    while ((line = reader.ReadLine()) != null)
+                    char[] buffer = new char[8192];
+                    StringBuilder line = new StringBuilder();
+                    int n;
+                    while ((n = reader.Read(buffer, 0, buffer.Length)) > 0)
                     {
-                        if (line.Trim().Length == 0) continue;
-                        try { result.Add(Event.FromJson(Json.ParseObject(line))); }
-                        catch (JsonException ex) { Log.Warn("events", "ligne illisible dans " + path + " : " + ex.Message); }
+                        for (int i = 0; i < n; i++)
+                        {
+                            if (buffer[i] != '\n') { line.Append(buffer[i]); continue; }
+                            AddLine(result, line.ToString(), path);
+                            line.Length = 0;
+                        }
                     }
                 }
             }
+            catch (FileNotFoundException) { }      // purgé ou vidé entre-temps
+            catch (DirectoryNotFoundException) { }
             return result;
+        }
+
+        private static void AddLine(List<Event> result, string line, string path)
+        {
+            if (line.Trim().Length == 0) return;
+            try { result.Add(Event.FromJson(Json.ParseObject(line))); }
+            catch (JsonException ex) { Log.Warn("events", "ligne illisible dans " + path + " : " + ex.Message); }
         }
 
         /// <summary>`events.clear` : ferme le fichier du jour et supprime tous les fichiers d'events ; rend le nombre d'events (lignes non vides) supprimés.</summary>

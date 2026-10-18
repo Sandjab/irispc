@@ -29,6 +29,12 @@ namespace IrisKit
 
         public string PipeName { get { return pipeName; } }
 
+        /// <summary>Attente avant de réessayer de créer une instance d'écoute après un échec.</summary>
+        public TimeSpan RetryDelay = TimeSpan.FromSeconds(1);
+
+        /// <summary>Tests : erreur injectée à la création d'une instance (`first` : la toute première) ; null = aucune.</summary>
+        internal Func<bool, Exception> InstanceFault;
+
         public AdminServer(string pipeName, Func<byte[], Task<byte[]>> handler)
         {
             if (string.IsNullOrEmpty(pipeName)) throw new ArgumentException("nom de pipe vide", "pipeName");
@@ -44,7 +50,7 @@ namespace IrisKit
             if (stopping != null) throw new InvalidOperationException("serveur du pipe déjà démarré");
             slots.Wait();
             NamedPipeServerStream first;
-            try { first = PipeNative.CreateServer(pipeName, true, MaxInstances, security); }
+            try { first = CreateInstance(true); }
             catch { slots.Release(); throw; }
             stopping = new CancellationTokenSource();
             acceptLoop = AcceptLoopAsync(first, stopping.Token);
@@ -77,21 +83,50 @@ namespace IrisKit
                     Release(listening);
                     if (!(waitError is IOException))
                     {
-                        Log.Error("ipc", "pipe admin arrêté : " + waitError.GetType().Name + " : " + waitError.Message);
-                        return;
+                        Log.Error("ipc", "attente de connexion sur le pipe admin en échec : " + waitError.GetType().Name + " : " + waitError.Message + " ; nouvelle instance");
+                        if (!await PauseAsync(cancel).ConfigureAwait(false)) return;
                     }
                     // client parti avant l'acceptation : instance jetée, on en crée une autre
                 }
-                try { await slots.WaitAsync(cancel).ConfigureAwait(false); }
-                catch (OperationCanceledException) { return; }
-                try { listening = PipeNative.CreateServer(pipeName, false, MaxInstances, security); }
-                catch (IOException ex)
-                {
-                    slots.Release();
-                    Log.Error("ipc", "nouvelle instance du pipe admin impossible : " + ex.Message);
-                    return;
-                }
+                listening = await NextInstanceAsync(cancel).ConfigureAwait(false);
+                if (listening == null) return;
             }
+        }
+
+        /// <summary>
+        /// Prochaine instance d'écoute ; un échec de création est journalisé puis réessayé après RetryDelay, jusqu'à Stop (null) :
+        /// sans pipe, un daemon --locked ne pourrait plus jamais être déverrouillé.
+        /// </summary>
+        private async Task<NamedPipeServerStream> NextInstanceAsync(CancellationToken cancel)
+        {
+            while (true)
+            {
+                try { await slots.WaitAsync(cancel).ConfigureAwait(false); }
+                catch (OperationCanceledException) { return null; }
+                Exception failure;
+                try { return CreateInstance(false); }
+                catch (IOException ex) { failure = ex; }
+                slots.Release();
+                Log.Error("ipc", "nouvelle instance du pipe admin impossible : " + failure.Message + " ; nouvel essai dans "
+                    + RetryDelay.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture) + " s");
+                if (!await PauseAsync(cancel).ConfigureAwait(false)) return null;
+            }
+        }
+
+        /// <summary>Attend RetryDelay ; faux si Stop intervient pendant l'attente.</summary>
+        private async Task<bool> PauseAsync(CancellationToken cancel)
+        {
+            try { await Task.Delay(RetryDelay, cancel).ConfigureAwait(false); }
+            catch (OperationCanceledException) { return false; }
+            return true;
+        }
+
+        private NamedPipeServerStream CreateInstance(bool first)
+        {
+            Func<bool, Exception> fault = InstanceFault;
+            Exception injected = fault == null ? null : fault(first);
+            if (injected != null) throw injected;
+            return PipeNative.CreateServer(pipeName, first, MaxInstances, security);
         }
 
         private async Task ServeAsync(NamedPipeServerStream pipe, CancellationToken cancel)

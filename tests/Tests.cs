@@ -194,6 +194,9 @@ namespace Iris.Tests
             Check.Run("irisd : rule.add et config.set à chaud par le pipe", Daemon_HotRulesViaPipe);
             Check.Run("irisd : arrêt avec un client du pipe inactif", Daemon_StopWithIdlePipeClient);
             Check.Run("Sécurité : ni valeur ni mot de passe nulle part (pipe, SSE, logs, fichiers)", Security_NoValueOrPasswordAnywhere);
+            Check.Run("Revue finale : lire le journal ne bloque pas Append", Final_JournalReadDoesNotBlockAppend);
+            Check.Run("Revue finale : -32700 sans fragment de la requête", Final_ParseErrorNeverEchoesPayload);
+            Check.Run("Revue finale : le pipe survit à un échec de création d'instance", Final_AdminPipeSurvivesInstanceFailure);
 
             return Check.Summary();
         }

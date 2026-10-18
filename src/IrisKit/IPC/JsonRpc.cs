@@ -78,7 +78,7 @@ namespace IrisKit
             catch (DecoderFallbackException) { throw new RpcException(RpcErrors.ParseError, "Parse error: UTF-8 invalide"); }
             object parsed;
             try { parsed = Json.Parse(text); }
-            catch (JsonException ex) { throw new RpcException(RpcErrors.ParseError, "Parse error: " + ex.Message); }
+            catch (JsonException) { throw new RpcException(RpcErrors.ParseError, "Parse error"); } // le message du parseur cite la requête (mot de passe compris)
             IDictionary<string, object> dict = parsed as IDictionary<string, object>;
             if (dict == null) throw new RpcException(RpcErrors.InvalidRequest, "Invalid Request: objet JSON attendu");
             object rawId;
