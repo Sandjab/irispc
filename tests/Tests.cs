@@ -186,6 +186,14 @@ namespace Iris.Tests
             Check.Run("SSE : abonné lent → dropped, Emit jamais bloqué", Sse_SlowConsumerDropped);
             Check.Run("SSE : bouclage seul, port occupé", Sse_LoopbackAndPortInUse);
             Check.Run("SSE : Stop ferme les abonnés", Sse_StopClosesSubscribers);
+            Check.Run("irisd : --locked et incompatibilité", Arguments_Locked);
+            Check.Run("irisd : --locked → 503, vault.unlock par le pipe → MITM", Daemon_LockedThenPipeUnlock_EnablesMITM);
+            Check.Run("irisd : vault.unlock annule l'invite console", Daemon_PipeUnlockCancelsConsolePrompt);
+            Check.Run("irisd : pipe déjà existant → 3", Daemon_PipeInUse_Exit3);
+            Check.Run("irisd : port SSE occupé → 3", Daemon_SsePortInUse_Exit3);
+            Check.Run("irisd : rule.add et config.set à chaud par le pipe", Daemon_HotRulesViaPipe);
+            Check.Run("irisd : arrêt avec un client du pipe inactif", Daemon_StopWithIdlePipeClient);
+            Check.Run("Sécurité : ni valeur ni mot de passe nulle part (pipe, SSE, logs, fichiers)", Security_NoValueOrPasswordAnywhere);
 
             return Check.Summary();
         }

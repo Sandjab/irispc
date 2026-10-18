@@ -23,6 +23,8 @@ namespace Irisd
         public bool ShowHelp { get; private set; }
         public bool InMemorySecrets { get; private set; }
         public bool InMemoryCa { get; private set; }
+        /// <summary>Démarre coffre fermé, sans invite console : déverrouillage par le pipe (`vault.unlock`).</summary>
+        public bool Locked { get; private set; }
         /// <summary>Dossier des données ; null = data\ à côté de l'exécutable.</summary>
         public string Data { get; private set; }
         /// <summary>Niveau de log ; null = valeur de config.json.</summary>
@@ -46,6 +48,7 @@ namespace Irisd
                     case "--help": result.ShowHelp = true; break;
                     case "--in-memory-secrets": result.InMemorySecrets = true; break;
                     case "--in-memory-ca": result.InMemoryCa = true; break;
+                    case "--locked": result.Locked = true; break;
                     case "--data":
                         result.Data = ValueOf(args, ref i);
                         break;
@@ -59,17 +62,20 @@ namespace Irisd
                         throw new ArgumentsException("option inconnue : " + arg);
                 }
             }
+            if (result.Locked && result.InMemorySecrets)
+                throw new ArgumentsException("--locked et --in-memory-secrets sont incompatibles : le mode debug n'a pas de coffre à déverrouiller");
             return result;
         }
 
         public static string Usage()
         {
             return string.Join(Environment.NewLine, new[] {
-                "Usage : irisd --foreground [--data <dossier>] [--in-memory-secrets] [--in-memory-ca] [--log-level <niveau>]",
+                "Usage : irisd --foreground [--locked] [--data <dossier>] [--in-memory-secrets] [--in-memory-ca] [--log-level <niveau>]",
                 "        irisd --version | --help",
                 "",
                 "Options :",
                 "  --foreground           lance le daemon en avant-plan (obligatoire dans cette version)",
+                "  --locked               démarre coffre fermé, sans invite : déverrouillage par le pipe (vault.unlock)",
                 "  --data <dossier>       dossier des données (défaut : data\\ à côté de irisd.exe)",
                 "  --in-memory-secrets    DEBUG : secrets lus depuis IRIS_SECRET_<NAME>, coffre non ouvert",
                 "  --in-memory-ca         DEBUG : CA éphémère, jamais écrit dans le coffre",

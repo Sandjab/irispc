@@ -46,13 +46,30 @@ namespace Iris.Tests
             return condition();
         }
 
-        private static void WriteListenPort(string data, int port)
+        /// <summary>Points d'écoute d'un daemon de test : jamais 8888, 8899 ni iris-admin.</summary>
+        private sealed class TestEndpoints
         {
+            public int Proxy;
+            public int Events;
+            public string Pipe;
+        }
+
+        private static TestEndpoints WriteTestConfig(string data) { return WriteTestConfig(data, 0); }
+
+        /// <summary>config.json de test : proxy et SSE sur des ports libres (ou `proxyPort` imposé), pipe au nom unique.</summary>
+        private static TestEndpoints WriteTestConfig(string data, int proxyPort)
+        {
+            TestEndpoints t = new TestEndpoints();
+            t.Proxy = proxyPort > 0 ? proxyPort : FreePort();
+            t.Events = FreePort();
+            while (t.Events == t.Proxy) t.Events = FreePort();
+            t.Pipe = TestPipeName();
             DataDir.Prepare(data);
             ConfigStore store = ConfigStore.Open(data, T0);
             Config c = store.Current;
-            BrokerConfig b = new BrokerConfig("127.0.0.1:" + port, c.Broker.EventsListen, c.Broker.AdminPipe, c.Broker.LogLevel, c.Broker.EventRetentionDays, c.Broker.EventRingSize);
+            BrokerConfig b = new BrokerConfig("127.0.0.1:" + t.Proxy, "127.0.0.1:" + t.Events, t.Pipe, c.Broker.LogLevel, c.Broker.EventRetentionDays, c.Broker.EventRingSize);
             store.Save(new Config(c.Version, b, c.Security, c.Backups, c.Hosts, c.Plugins), T0);
+            return t;
         }
 
         private static void Entry_StartsProxyAndAnswersPing()
@@ -61,8 +78,7 @@ namespace Iris.Tests
             try
             {
                 string data = Path.Combine(dir, "data");
-                int port = FreePort();
-                WriteListenPort(data, port);
+                int port = WriteTestConfig(data).Proxy;
                 LiveDaemon d = StartDaemon(new ScriptedConsoleInput(), "--foreground", "--data", data, "--in-memory-secrets", "--in-memory-ca");
                 try
                 {
@@ -92,7 +108,7 @@ namespace Iris.Tests
             {
                 int port = ((IPEndPoint)squatter.LocalEndpoint).Port;
                 string data = Path.Combine(dir, "data");
-                WriteListenPort(data, port);
+                WriteTestConfig(data, port);
                 LiveDaemon d = StartDaemon(new ScriptedConsoleInput(), "--foreground", "--data", data, "--in-memory-secrets", "--in-memory-ca");
                 Check.Eq(ExitCodes.Port, d.WaitExit(), "port occupé → 3");
                 string err = d.Err.Snapshot();
@@ -108,6 +124,7 @@ namespace Iris.Tests
             try
             {
                 string data = Path.Combine(dir, "data");
+                WriteTestConfig(data);
                 ScriptedConsoleInput console = new ScriptedConsoleInput();
                 console.BlockWhenExhausted = true;
                 LiveDaemon d = StartDaemon(console, "--foreground", "--data", data);
