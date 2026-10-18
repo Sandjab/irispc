@@ -173,6 +173,10 @@ namespace Iris.Tests
             Check.Run("Dispatcher : secret.* refusées coffre fermé (-32020)", Dispatcher_VaultLockedRefusals);
             Check.Run("Dispatcher : vault.status / unlock / create", Dispatcher_VaultMethods);
             Check.Run("Dispatcher : logs sans paramètres", Dispatcher_LogsMethodNeverParams);
+            Check.Run("Méthodes : rule.* et config.*", Methods_RulesAndConfig);
+            Check.Run("Méthodes : daemon.status / stats / pause / resume", Methods_DaemonStatusAndPause);
+            Check.Run("Méthodes : events.query (ring + journal) et events.clear", Methods_EventsQueryAndClear);
+            Check.Run("Méthodes : ca.export_path / fingerprint / is_trusted", Methods_CA);
 
             return Check.Summary();
         }

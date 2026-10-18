@@ -105,7 +105,7 @@ Précisions :
 
 - `daemon.stats` : compteurs de `EventRing` par kind ; `req_total` est leur somme. `version` = `IrisVersion.Value`. `vault` ∈ `absent | locked | unlocked`.
 - `events.query` : filtres appliqués dans l'ordre `since`, `until`, `kind`, `host`, puis conservation des `limit` plus récents ; `limit` absent ou supérieur à 10 000 → 10 000. Ordre chronologique croissant.
-- `events.clear` : `deleted_count` = events retirés du ring + lignes des fichiers JSONL supprimés.
+- `events.clear` : vide le ring et supprime les fichiers JSONL ; `deleted_count` = events supprimés du journal (le ring en est un sous-ensemble), ou du ring s'il n'y a pas de journal — le plus grand des deux.
 - `rule.delete` : hôte `origin: default` → -32010, hôte absent → -32011. `rule.add` d'un hôte invalide → -32602.
 - `config.set` : clés acceptées et sémantique de `ConfigStore.applyUpdates` d'IRIS, `broker.admin_socket` remplacé par `broker.admin_pipe`. Clés à chaud (`applied`) : `security.on_exfil_attempt`, `security.max_substitutions_per_minute`, `backups.max_count`. Toutes les clés `broker.*` vont dans `requires_restart`. Clé inconnue ou valeur invalide → -32602, rien n'est écrit (lot atomique). `hosts` ne se modifie que par `rule.*`.
 - Méthode marquée « coffre requis » appelée porte fermée → -32020.

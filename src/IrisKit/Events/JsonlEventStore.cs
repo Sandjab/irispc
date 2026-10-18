@@ -25,6 +25,7 @@ namespace IrisKit
         private DateTime openDay;
 
         public string Directory { get { return dir; } }
+        public int RetentionDays { get { return retentionDays; } }
 
         public JsonlEventStore(string eventsDir, int retentionDays, Func<DateTime> clock)
         {
@@ -93,14 +94,42 @@ namespace IrisKit
             if (!File.Exists(path)) return result;
             lock (gate)
             {
-                foreach (string line in File.ReadAllLines(path, Encoding.UTF8))
+                using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                using (StreamReader reader = new StreamReader(fs, Encoding.UTF8))
                 {
-                    if (line.Trim().Length == 0) continue;
-                    try { result.Add(Event.FromJson(Json.ParseObject(line))); }
-                    catch (JsonException ex) { Log.Warn("events", "ligne illisible dans " + path + " : " + ex.Message); }
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        if (line.Trim().Length == 0) continue;
+                        try { result.Add(Event.FromJson(Json.ParseObject(line))); }
+                        catch (JsonException ex) { Log.Warn("events", "ligne illisible dans " + path + " : " + ex.Message); }
+                    }
                 }
             }
             return result;
+        }
+
+        /// <summary>`events.clear` : ferme le fichier du jour et supprime tous les fichiers d'events ; rend le nombre d'events (lignes non vides) supprimés.</summary>
+        public int ClearAll()
+        {
+            lock (gate)
+            {
+                CloseWriter();
+                openDay = DateTime.MinValue;
+                int count = 0;
+                foreach (string path in System.IO.Directory.GetFiles(dir, Prefix + "*" + Extension))
+                {
+                    try
+                    {
+                        foreach (string line in File.ReadAllLines(path, Encoding.UTF8)) if (line.Trim().Length > 0) count++;
+                        File.Delete(path);
+                    }
+                    catch (IOException ex) { Log.Warn("events", "suppression impossible : " + path + " : " + ex.Message); }
+                    catch (UnauthorizedAccessException ex) { Log.Warn("events", "suppression impossible : " + path + " : " + ex.Message); }
+                }
+                Log.Info("events", "journal vidé : " + count + " event(s) supprimé(s)");
+                return count;
+            }
         }
 
         private void CloseWriter()

@@ -25,6 +25,8 @@ namespace IrisKit
             this.context = context;
             SecretMethods.Register(this, context);
             VaultMethods.Register(this, context);
+            ConfigMethods.Register(this, context);
+            DaemonMethods.Register(this, context);
         }
 
         public ICollection<string> MethodNames { get { return methods.Keys; } }
