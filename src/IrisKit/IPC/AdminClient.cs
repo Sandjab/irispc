@@ -47,7 +47,8 @@ namespace IrisKit
             {
                 p.Connect((int)timeout.TotalMilliseconds);
                 string actual = PipeNative.ServerImagePath(p);
-                if (!string.Equals(Path.GetFullPath(actual), Path.GetFullPath(expectedServerPath), StringComparison.OrdinalIgnoreCase))
+                // Identité de fichier, pas de chemin : subst, jonction ou nom 8.3 ne provoquent pas de faux refus (spec phase 5 §8).
+                if (!FileIdentity.Same(actual, expectedServerPath))
                     throw new AdminServerIdentityException(expectedServerPath, actual);
                 return new AdminClient(p);
             }

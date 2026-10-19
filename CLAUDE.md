@@ -47,6 +47,7 @@ render.bat   rend chaque vue de l'UI en PNG dans tests\out, sans réseau ni daem
 - Pas de framework de test : `tests\Tests.cs` est un programme avec son propre `Main` qui remplace `Program.cs`, assertions maison, un compteur de vérifications. Les tests réseau utilisent un upstream HTTP mock local (cf. `../Iris/Tests/IntegrationTests/MockUpstream.swift`). Les tests du coffre créent une base temporaire dans `%TEMP%`, jamais une base utilisateur.
 - Les tests d'intégration du proxy tournent en process : `tests\MockUpstream.cs` (TLS avec son propre CA) et `tests\TestProxyClient.cs` (`CONNECT` puis TLS en confiance au CA du proxy) ; tout sur `127.0.0.1` port 0, jamais de réseau externe.
 - Tests IPC et daemon : pipe au nom unique `iris-admin-test-<guid>` (`TestPipeName()`), SSE sur le port 0, `WriteTestConfig(data)` écrit un `config.json` aux ports libres avant tout daemon réel (les services démarrent avant l'invite console) ; `AdminClient.Connect(pipe, SelfPath(), …)` car le serveur tourne dans l'exe de tests. Jamais 8888, 8899 ni `iris-admin` dans un test.
+- Tests de la CLI : `Cli.Run(args, CliContext)` en process (le `Main` de `src\iris\Program.cs` est exclu de `test.bat`) ; `CliCtx(data)` capture les sorties, redirige stdin, attend l'exe de tests comme serveur et lit le pipe dans `data\config.json` ; `StartCliDaemon()` lance un daemon réel en mémoire. La CLI n'utilise jamais `IrisKit.Log` (état statique partagé avec le daemon du même processus).
 - Dossier portable `build\Iris\` : les exécutables, leurs `.exe.config` (modèles dans `config\`), les fichiers KeePass, et `data\` (config, coffre, CA, events, backups) résolu par chaque exe depuis son propre emplacement. Pas de repli vers AppData.
 - Versionner : `AssemblyInfo.cs`, `app.manifest`, et la constante de version applicative, ensemble.
 
@@ -157,9 +158,9 @@ Les phases 0 à 2 forment le **socle**, spécifié dans `docs/superpowers/specs/
 3. **Phase 2** — proxy MITM : `HttpParser`, tunnel, `LeafCertCache`, scanner, `ExfilRuleEngine` R1–R5, `RequestProcessor`, `MITMHandler` (keep-alive, streaming), `irisd --foreground` écoute sur `127.0.0.1:8888` ; démontrable avec le scénario `curl` de la spec §1.
 4. **Phase 3** — IPC : named pipe JSON-RPC (méthodes d'IRIS + `vault.status/unlock/create`, client qui vérifie l'identité du serveur), mode coffre fermé (`irisd --foreground --locked`, 503 pour la whitelist tant que le coffre est fermé), rechargement à chaud de `security.*`, `backups.max_count` et des hôtes, flux SSE `127.0.0.1:8899/events` ; spec `docs/superpowers/specs/2026-10-18-phase-3-ipc-design.md`.
 5. **Phase 4** — absorbée : scoping et R1–R5 livrés en phase 2, rechargement à chaud en phase 3, notification de `block_and_notify` en phase 6.
-6. **Phase 5** — CLI `iris` (dont `mcp wrap`, `doctor`).
+6. **Phase 5** — CLI `iris` : parité avec les sous-commandes du code Swift (hors `ca install|uninstall`, `shell`, `plugin`) + `vault status|unlock|create`, `mcp wrap|unwrap|--watch`, `doctor`, identité du serveur du pipe par fichier ; spec `docs/superpowers/specs/2026-10-18-phase-5-cli-design.md`.
 7. **Phase 6** — app tray, thème Instrument (lecture seule, puis CRUD).
-8. **Phase 7** — lancement avec Windows, installation CA, zip de release, manuel + Pages.
+8. **Phase 7** — lancement avec Windows, installation du CA (`iris ca install|uninstall`), équivalent Windows de `iris shell`, zip de release, manuel + Pages.
 9. **Phase 8** — hardening (fuzzing du scanner, tests d'intégration).
 
 Chaque phase est démontrable (build, run, test) avant la suivante.

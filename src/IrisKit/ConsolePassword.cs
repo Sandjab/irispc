@@ -3,19 +3,19 @@ using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Irisd
+namespace IrisKit
 {
-    /// <summary>Saisie du mot de passe maître. null = entrée fermée (EOF) ; Ctrl+C = OperationCanceledException. Jamais loguée.</summary>
-    public interface IConsoleInput
+    /// <summary>Saisie d'un mot de passe ou d'une valeur sans écho. null = entrée fermée (EOF) ; annulation = OperationCanceledException. Jamais loguée.</summary>
+    public interface IPasswordReader
     {
         SecureString ReadPassword(string prompt, CancellationToken cancel);
     }
 
     /// <summary>
-    /// Console réelle : saisie masquée (ReadKey) en surveillant l'annulation entre deux touches ; si l'entrée est redirigée,
-    /// ReadLine avec avertissement unique. Revue phase 1, mineur 4 : Ctrl+C interrompt l'invite.
+    /// Console réelle (irisd et iris) : saisie masquée (ReadKey) en surveillant l'annulation entre deux touches ; si l'entrée est
+    /// redirigée, ReadLine avec avertissement unique (irisd seulement : iris refuse avant, spec phase 5 §5).
     /// </summary>
-    public sealed class ConsoleInput : IConsoleInput
+    public sealed class ConsolePasswordReader : IPasswordReader
     {
         private bool warnedRedirected;
 

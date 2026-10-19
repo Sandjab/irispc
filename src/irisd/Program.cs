@@ -1,6 +1,7 @@
 using System;
 using System.Text;
 using System.Threading;
+using IrisKit;
 
 namespace Irisd
 {
@@ -16,7 +17,7 @@ namespace Irisd
                 e.Cancel = true;
                 cts.Cancel();
             };
-            return Entry.Run(args, Console.Out, Console.Error, new ConsoleInput(), cts.Token);
+            return Entry.Run(args, Console.Out, Console.Error, new ConsolePasswordReader(), cts.Token);
         }
     }
 }

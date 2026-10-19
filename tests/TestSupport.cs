@@ -34,7 +34,7 @@ namespace Iris.Tests
     }
 
     /// <summary>Console scriptée : chaque ReadPassword rend la réponse suivante ; liste épuisée = null (EOF), ou attente de l'annulation (OperationCanceledException) si BlockWhenExhausted.</summary>
-    public sealed class ScriptedConsoleInput : Irisd.IConsoleInput
+    public sealed class ScriptedConsoleInput : IrisKit.IPasswordReader
     {
         private readonly System.Collections.Generic.Queue<string> answers;
         public System.Collections.Generic.List<string> Prompts = new System.Collections.Generic.List<string>();

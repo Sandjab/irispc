@@ -14,10 +14,10 @@ namespace Irisd
     internal sealed class ConsoleUnlock
     {
         private readonly VaultGate vault;
-        private readonly IConsoleInput console;
+        private readonly IPasswordReader console;
         private readonly TextWriter stderr;
 
-        public ConsoleUnlock(VaultGate vault, IConsoleInput console, TextWriter stderr)
+        public ConsoleUnlock(VaultGate vault, IPasswordReader console, TextWriter stderr)
         {
             this.vault = vault;
             this.console = console;

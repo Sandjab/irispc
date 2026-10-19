@@ -17,9 +17,9 @@ namespace Irisd
         private readonly Arguments options;
         private readonly TextWriter stdout;
         private readonly TextWriter stderr;
-        private readonly IConsoleInput console;
+        private readonly IPasswordReader console;
 
-        public Daemon(Arguments options, TextWriter stdout, TextWriter stderr, IConsoleInput console)
+        public Daemon(Arguments options, TextWriter stdout, TextWriter stderr, IPasswordReader console)
         {
             this.options = options; this.stdout = stdout; this.stderr = stderr; this.console = console;
         }

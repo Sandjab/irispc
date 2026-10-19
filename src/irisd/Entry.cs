@@ -8,7 +8,7 @@ namespace Irisd
     /// <summary>Point d'entrée testable (revue phase 0) : analyse des arguments, aide, version, puis Daemon.Run.</summary>
     public static class Entry
     {
-        public static int Run(string[] args, TextWriter stdout, TextWriter stderr, IConsoleInput console, CancellationToken cancel)
+        public static int Run(string[] args, TextWriter stdout, TextWriter stderr, IPasswordReader console, CancellationToken cancel)
         {
             Arguments options;
             try { options = Arguments.Parse(args); }
